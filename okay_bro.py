@@ -211,47 +211,59 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                     except: pass
 
                 # ၄။ AI DYNAMIC LEARNING (Pattern Matching)
-                # လေ့လာရန်အတွက် နောက်ဆုံးပွဲစဉ် ၁၀၀၀ ကို ဆွဲထုတ်မည် (များလွန်းလျှင် Memory ပေါက်နိုင်၍ Limit ထားပါသည်)
-                cursor = history_collection.find().sort("issue_number", -1).limit(1000)
-                history_docs = await cursor.to_list(length=1000)
+                # လေ့လာရန်အတွက် နောက်ဆုံးပွဲစဉ် ၅၀၀၀ ကို ဆွဲထုတ်မည် (များလေ ပိုကောင်းလေဖြစ်၍ 1000 မှ 5000 သို့ တိုးထားပါသည်)
+                cursor = history_collection.find().sort("issue_number", -1).limit(5000)
+                history_docs = await cursor.to_list(length=5000)
                 history_docs.reverse() # အဟောင်းမှ အသစ်သို့ ပြန်စီမည်
                 
                 all_history = [doc["size"] for doc in history_docs]
-                PATTERN_LENGTH = 3 
                 
-                if len(all_history) > PATTERN_LENGTH:
-                    recent_pattern = all_history[-PATTERN_LENGTH:]
-                    big_next_count = 0
-                    small_next_count = 0
-                    
-                    for i in range(len(all_history) - PATTERN_LENGTH):
-                        if all_history[i:i+PATTERN_LENGTH] == recent_pattern:
-                            next_result = all_history[i+PATTERN_LENGTH]
-                            if next_result == 'BIG': big_next_count += 1
-                            elif next_result == 'SMALL': small_next_count += 1
-                                
-                    total_pattern_matches = big_next_count + small_next_count
-                    
-                    if total_pattern_matches > 0:
-                        big_prob = (big_next_count / total_pattern_matches) * 100
-                        small_prob = (small_next_count / total_pattern_matches) * 100
-                        pattern_str = " -> ".join(recent_pattern).replace('BIG', 'B').replace('SMALL', 'S')
+                # 10 pattern အထိ ရှာမည်၊ မတွေ့ပါက 9, 8... 3 အထိ လျှော့ရှာမည့် Dynamic စနစ်
+                MAX_PATTERN_LENGTH = 10
+                MIN_PATTERN_LENGTH = 4
+                
+                pattern_found = False
+                
+                for current_len in range(MAX_PATTERN_LENGTH, MIN_PATTERN_LENGTH - 1, -1):
+                    if len(all_history) > current_len:
+                        recent_pattern = all_history[-current_len:]
+                        big_next_count = 0
+                        small_next_count = 0
                         
-                        if big_prob > small_prob:
-                            predicted, base_prob = "BIG (အကြီး) 🔴", big_prob
-                            reason = f"[{pattern_str}] လာလျှင် အကြီးဆက်ထွက်လေ့ရှိ၍"
-                        elif small_prob > big_prob:
-                            predicted, base_prob = "SMALL (အသေး) 🟢", small_prob
-                            reason = f"[{pattern_str}] လာလျှင် အသေးဆက်ထွက်လေ့ရှိ၍"
-                        else:
-                            predicted, base_prob = "BIG (အကြီး) 🔴", 50.0
-                            reason = "Pattern အသစ်ဖြစ်၍ မျှခြေအရ ခန့်မှန်းထားသည်"
-                    else:
-                        predicted = "BIG (အကြီး) 🔴" if all_history.count("SMALL") > all_history.count("BIG") else "SMALL (အသေး) 🟢"
-                        base_prob = 55.0
-                        reason = "သမိုင်းကြောင်းအရ တွက်ချက်ထားသည်"
-                else:
-                    predicted, base_prob, reason = "BIG (အကြီး) 🔴", 50.0, "AI သင်ယူရန် မှတ်တမ်းအချက်အလက် စုဆောင်းနေဆဲဖြစ်သည်"
+                        for i in range(len(all_history) - current_len):
+                            if all_history[i:i+current_len] == recent_pattern:
+                                next_result = all_history[i+current_len]
+                                if next_result == 'BIG': big_next_count += 1
+                                elif next_result == 'SMALL': small_next_count += 1
+                                    
+                        total_pattern_matches = big_next_count + small_next_count
+                        
+                        # အနည်းဆုံး သမိုင်းကြောင်းမှာ ၁ ကြိမ် အထက်တွေ့ဖူးမှသာ အတည်ယူမည်
+                        if total_pattern_matches > 0:
+                            big_prob = (big_next_count / total_pattern_matches) * 100
+                            small_prob = (small_next_count / total_pattern_matches) * 100
+                            
+                            # [B-S-B-B-S-B-S-B-B-S] ဟု တိုတိုရှင်းရှင်းပြရန်
+                            pattern_str = "-".join(recent_pattern).replace('BIG', 'B').replace('SMALL', 'S')
+                            
+                            if big_prob > small_prob:
+                                predicted, base_prob = "BIG (အကြီး) 🔴", big_prob
+                                reason = f"[{pattern_str}] လာလျှင် အကြီးဆက်ထွက်လေ့ရှိ၍"
+                            elif small_prob > big_prob:
+                                predicted, base_prob = "SMALL (အသေး) 🟢", small_prob
+                                reason = f"[{pattern_str}] လာလျှင် အသေးဆက်ထွက်လေ့ရှိ၍"
+                            else:
+                                predicted, base_prob = "BIG (အကြီး) 🔴", 50.0
+                                reason = f"[{pattern_str}] အရင်က မျှခြေထွက်ဖူး၍ အကြီးရွေးထားသည်"
+                            
+                            pattern_found = True
+                            break # Pattern တစ်ခုတွေ့တာနဲ့ ဆက်မရှာတော့ဘဲ For loop မှ ထွက်မည်
+                            
+                if not pattern_found:
+                    # မည်သည့် Pattern မှ (3 ထိတောင်) မတွေ့ခဲ့လျှင် သို့မဟုတ် Data မပြည့်သေးလျှင်
+                    predicted = "BIG (အကြီး) 🔴" if all_history.count("SMALL") > all_history.count("BIG") else "SMALL (အသေး) 🟢"
+                    base_prob = 55.0
+                    reason = "Pattern အသစ်ဖြစ်နေသဖြင့် သမိုင်းကြောင်းအရ တွက်ချက်ထားသည်"
 
                 final_prob = min(round(base_prob, 1), 85.0)
 
@@ -259,13 +271,17 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                 LAST_PREDICTED_ISSUE = next_issue
                 LAST_PREDICTED_RESULT = "BIG" if "BIG" in predicted else "SMALL"
                 
-                await predictions_collection.insert_one({
-                    "issue_number": next_issue,
-                    "predicted_size": LAST_PREDICTED_RESULT,
-                    "probability": final_prob,
-                    "actual_size": None,
-                    "win_lose": None
-                })
+                # MongoDB တွင် Unique Key Error မတက်စေရန် insert_one အစား update_one (upsert) သုံးထားပါသည်
+                await predictions_collection.update_one(
+                    {"issue_number": next_issue},
+                    {"$set": {
+                        "predicted_size": LAST_PREDICTED_RESULT,
+                        "probability": final_prob,
+                        "actual_size": None,
+                        "win_lose": None
+                    }},
+                    upsert=True
+                )
 
                 current_balance = await get_user_balance(session)
                 print(f"✅ [NEW] ပွဲစဉ်: {latest_issue} -> 🤖 AI Predict: {predicted}")
