@@ -78,6 +78,7 @@ async def login_and_get_token(session: aiohttp.ClientSession):
         'random': '415e8bcd91ef4987966b9e9282ee51b8',
         'signature': 'D2FE1384ABF1D7D27E8D7AF63437DA2B',
         'timestamp': 1772990082,
+    }
     try:
         async with session.post('https://api.bigwinqaz.com/api/webapi/Login', headers=BASE_HEADERS, json=json_data) as response:
             data = await response.json()
