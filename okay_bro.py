@@ -1,6 +1,9 @@
 import asyncio
 import time
 import os
+import json
+import hashlib
+import uuid
 from dotenv import load_dotenv
 import aiohttp
 import motor.motor_asyncio 
@@ -47,8 +50,8 @@ CURRENT_MULTIPLIER = 1   # လက်ရှိ ဆ (Multiplier) (1, 2, 4, 8, 16, 
 MAX_MULTIPLIER = 32      # အများဆုံး ထိုးမည့် ဆ (32 ဆ = 320 Ks)
 BASE_BET_AMOUNT = 10     # အခြေခံ လောင်းကြေး (10 Ks)
 
-SELECT_TYPE_BIG = 13     # သေချာစစ်ဆေးပြီးသား BIG Code
-SELECT_TYPE_SMALL = 14   # သေချာစစ်ဆေးပြီးသား SMALL Code
+SELECT_TYPE_BIG = 13     # အကြီး
+SELECT_TYPE_SMALL = 14   # အသေး
 
 BASE_HEADERS = {
     'authority': 'api.bigwinqaz.com',
@@ -68,28 +71,57 @@ async def init_db():
         print(f"❌ MongoDB Indexing Error: {e}")
 
 # ==========================================
-# 🔑 3. ASYNC API FUNCTIONS
+# 🔐 3. DYNAMIC SIGNATURE GENERATOR (THE MAGIC)
+# ==========================================
+def sign_payload(payload):
+    """
+    JavaScript ၏ MD5 Signature တွက်ချက်မှုအတိုင်း တိကျစွာ လုပ်ဆောင်ပေးသော Function
+    """
+    # အချိန်နှင့် Random Token အသစ် အမြဲထည့်မည်
+    payload['timestamp'] = int(time.time())
+    if 'random' not in payload:
+        payload['random'] = uuid.uuid4().hex # 32-char လုံခြုံရေး Token အသစ်
+
+    # Keys များကို A-Z အစဉ်လိုက်စီမည်
+    sorted_keys = sorted(payload.keys())
+    
+    # တန်ဖိုးမရှိသော Data များကို ဖယ်ထုတ်မည်
+    sign_dict = {}
+    for k in sorted_keys:
+        v = payload[k]
+        if k != "signature" and v is not None and v != "" and not isinstance(v, (list, dict)):
+            sign_dict[k] = v
+
+    # JSON စာသားအဖြစ်ပြောင်းမည် (Space မပါအောင် separators သုံးထားသည်)
+    json_str = json.dumps(sign_dict, separators=(',', ':'))
+    
+    # MD5 ဖြင့် Hash ပြုလုပ်ပြီး အကြီး (Uppercase) သို့ပြောင်းမည်
+    sig = hashlib.md5(json_str.encode('utf-8')).hexdigest().upper()
+    
+    payload['signature'] = sig
+    return payload
+
+# ==========================================
+# 🔑 4. ASYNC API FUNCTIONS
 # ==========================================
 async def login_and_get_token(session: aiohttp.ClientSession):
     global CURRENT_TOKEN
     print("🔐 အကောင့်ထဲသို့ Login ဝင်နေပါသည်...")
     
-    print("🔐 အကောင့်ထဲသို့ Login ဝင်နေပါသည်...")
-    
     json_data = {
-        'username': '959680090540',
-        'pwd': 'Mitheint11',
+        'username': USERNAME,
+        'pwd': PASSWORD,
         'phonetype': 1,
         'logintype': 'mobile',
         'packId': '',
         'deviceId': '51ed4ee0f338a1bb24063ffdfcd31ce6',
-        'language': 7,
-        'random': 'd85ed31c80a9447d9c2eb8e713b6046d',
-        'signature': 'EAEF4EF352C07BF7852E39B5AB2F4151',
-        'timestamp': 1772969564,
+        'language': 7
     }
+    # Signature Auto Generate လုပ်မည်
+    signed_data = sign_payload(json_data)
+
     try:
-        async with session.post('https://api.bigwinqaz.com/api/webapi/Login', headers=BASE_HEADERS, json=json_data) as response:
+        async with session.post('https://api.bigwinqaz.com/api/webapi/Login', headers=BASE_HEADERS, json=signed_data) as response:
             data = await response.json()
             if data.get('code') == 0:
                 token_str = data.get('data', {}) if isinstance(data.get('data'), str) else data.get('data', {}).get('token', '')
@@ -104,9 +136,12 @@ async def get_user_balance(session: aiohttp.ClientSession):
     if not CURRENT_TOKEN: return "0.00"
     headers = BASE_HEADERS.copy()
     headers['authorization'] = CURRENT_TOKEN
-    json_data = {'signature': '98BA4B555CD283B47C8F9F6C800DF741', 'language': 7, 'random': 'd36e1e8dadca4bdd8d5f2e08f1b06c56', 'timestamp': int(time.time())}
+    
+    json_data = {'language': 7}
+    signed_data = sign_payload(json_data)
+    
     try:
-        async with session.post('https://api.bigwinqaz.com/api/webapi/GetUserInfo', headers=headers, json=json_data) as response:
+        async with session.post('https://api.bigwinqaz.com/api/webapi/GetUserInfo', headers=headers, json=signed_data) as response:
             data = await response.json()
             if data.get('code') == 0: return data.get('data', {}).get('amount', '0.00')
             return "0.00"
@@ -121,20 +156,18 @@ async def place_auto_bet(session: aiohttp.ClientSession, issue_number: str, pred
 
     json_data = {
         'typeId': 30,
-        'issuenumber': issue_number,
+        'issuenumber': str(issue_number),
         'amount': BASE_BET_AMOUNT, 
         'betCount': multiplier,    
         'gameType': 2,
         'selectType': select_type,
-        'language': 7,
-        # ⚠️ သတိပြုရန်: Auto Bet လုပ်ရာတွင် API က Random/Signature အဟောင်းကို လက်မခံပါက ဤနေရာတွင် Error တက်နိုင်ပါသည်။
-        'random': '86bd4c2b012f46f1b2358270558380d8', 
-        'signature': '664BF461D9161A506E076D727D706998',
-        'timestamp': int(time.time()),
+        'language': 7
     }
+    # ⚠️ အရေးကြီးဆုံး: ပွဲစဉ်အသစ်အတွက် Signature အသစ်ကို လျှို့ဝှက်ဖော်မြူလာအတိုင်း အလိုအလျောက် တွက်ချက်မည်
+    signed_data = sign_payload(json_data)
 
     try:
-        async with session.post('https://api.bigwinqaz.com/api/webapi/GameBetting', headers=headers, json=json_data) as response:
+        async with session.post('https://api.bigwinqaz.com/api/webapi/GameBetting', headers=headers, json=signed_data) as response:
             data = await response.json()
             if data.get('code') == 0:
                 return True, "အောင်မြင်ပါသည်"
@@ -144,7 +177,7 @@ async def place_auto_bet(session: aiohttp.ClientSession, issue_number: str, pred
         return False, str(e)
 
 # ==========================================
-# 🧠 4. AI DYNAMIC PREDICT & BETTING LOGIC
+# 🧠 5. AI DYNAMIC PREDICT & BETTING LOGIC
 # ==========================================
 async def check_game_and_predict(session: aiohttp.ClientSession):
     global CURRENT_TOKEN, LAST_PROCESSED_ISSUE, LAST_PREDICTED_ISSUE, LAST_PREDICTED_RESULT, CURRENT_MULTIPLIER
@@ -156,12 +189,12 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
     headers['authorization'] = CURRENT_TOKEN
 
     json_data = {
-        'pageSize': 10, 'pageNo': 1, 'typeId': 30, 'language': 7,
-        'random': '85b82082418845c593a2641ae50af6de', 'signature': 'E7C0AAF6D1B429E89F83CA6FDBF3D4FC', 'timestamp': int(time.time()),
+        'pageSize': 10, 'pageNo': 1, 'typeId': 30, 'language': 7
     }
+    signed_data = sign_payload(json_data)
 
     try:
-        async with session.post('https://api.bigwinqaz.com/api/webapi/GetNoaverageEmerdList', headers=headers, json=json_data) as response:
+        async with session.post('https://api.bigwinqaz.com/api/webapi/GetNoaverageEmerdList', headers=headers, json=signed_data) as response:
             data = await response.json()
             if data.get('code') == 0:
                 records = data.get("data", {}).get("list", [])
@@ -284,7 +317,7 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
     except Exception as e: print(f"❌ Game Data Request Error: {e}")
 
 # ==========================================
-# 🔄 5. BACKGROUND TASK & MAIN LOOP
+# 🔄 6. BACKGROUND TASK & MAIN LOOP
 # ==========================================
 async def auto_broadcaster():
     await init_db() 
@@ -314,7 +347,7 @@ async def check_status(message: types.Message):
         await loading_msg.edit_text(status_text)
 
 async def main():
-    print("🚀 Aiogram Bigwin Bot (Auto Bet Enabled) စတင်နေပါပြီ...\n")
+    print("🚀 Aiogram Bigwin Bot (Auto Bet + Auto Signature) စတင်နေပါပြီ...\n")
     await bot.delete_webhook(drop_pending_updates=True)
     asyncio.create_task(auto_broadcaster())
     await dp.start_polling(bot)
