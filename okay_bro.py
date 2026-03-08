@@ -15,13 +15,13 @@ load_dotenv()
 # ==========================================
 # ⚙️ 1. CONFIGURATION
 # ==========================================
-USER = os.getenv("BIGWIN_USERNAME")
+USERNAME = os.getenv("BIGWIN_USERNAME")
 PASSWORD = os.getenv("BIGWIN_PASSWORD")
 TELEGRAM_BOT_TOKEN = os.getenv("BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = os.getenv("CHANNEL_ID")
 MONGO_URI = os.getenv("MONGO_URI") 
 
-if not all([USER, PASSWORD, TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID, MONGO_URI]):
+if not all([USERNAME, PASSWORD, TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID, MONGO_URI]):
     print("❌ Error: .env ဖိုင်ထဲတွင် အချက်အလက်များ ပြည့်စုံစွာ မပါဝင်ပါ။")
     exit()
   
@@ -68,18 +68,17 @@ async def login_and_get_token(session: aiohttp.ClientSession):
     
     # ⚠️ အသေချာဆုံး မူရင်း Login Payload
     json_data = {
-        'username': USER,
-        'pwd': PASSWORD,
+        'username': '959680090540',
+        'pwd': 'Mitheint11',
         'phonetype': 1,
         'logintype': 'mobile',
         'packId': '',
         'deviceId': '51ed4ee0f338a1bb24063ffdfcd31ce6',
         'language': 7,
-        'random': 'e9a8246ddf1e4514955ada53ef50bdc0',
-        'signature': '872204F85DDA09B5E7BFAFD9FECC402E',
-        'timestamp': 1772984986,
+        'random': '87f226ed2caa47dbabae1764c9c3958c',
+        'signature': '5127867D3DE7581DE6D36591BF3FBA22',
+        'timestamp': 1772987092,
     }
-
     try:
         async with session.post('https://api.bigwinqaz.com/api/webapi/Login', headers=BASE_HEADERS, json=json_data) as response:
             data = await response.json()
@@ -268,7 +267,7 @@ async def check_status(message: types.Message):
         status_text = (
             f"📊 <b>Account Status</b>\n"
             f"━━━━━━━━━━━━━━\n"
-            f"🔹 <b>Account :</b> <code>{USER}</code>\n"
+            f"🔹 <b>Account :</b> <code>{USERNAME}</code>\n"
             f"🔹 <b>Balance :</b> <code>{balance}</code> Ks\n"
             f"🔹 <b>Bot Status :</b> 🟢 Signal Active"
         )
