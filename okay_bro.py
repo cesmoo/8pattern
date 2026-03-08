@@ -8,14 +8,14 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
 # ==========================================
-# ⚙️ 1. CONFIGURATION (ဤနေရာတွင် တိုက်ရိုက်ပြင်ပါ)
+# ⚙️ 1. CONFIGURATION (ဒီနေရာမှာ သေချာပြင်ပါ)
 # ==========================================
-USERNAME = "959680090540" # သင့်အကောင့်
-PASSWORD = "Mitheint11"     # သင့် Password
+USERNAME = "959680090540" # ပုံ ၆ အရ အလုပ်လုပ်နေသော အကောင့်
+PASSWORD = "YOUR_PASSWORD"  # ⚠️ သင့် Password အမှန်ထည့်ပါ
 
-# သင့် Bot Token နှင့် Channel ID ကို အောက်တွင် အတိအကျ ထည့်ပါ (⚠️ မဖြစ်မနေ ထည့်ရန်)
-TELEGRAM_BOT_TOKEN = "8682629146:AAGQwoKW0DM6LPeY4rQMjv_X41hkNfuQ6D0" 
-TELEGRAM_CHANNEL_ID = "-1003803022333" # ဥပမာ -1001234567890
+# ⚠️ အရင်က စာပို့လို့ရခဲ့တဲ့ Token နဲ့ Channel ID အဟောင်းကို ဒီမှာ အတိအကျ ပြန်ထည့်ပါ ⚠️
+TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN_HERE" 
+TELEGRAM_CHANNEL_ID = "YOUR_CHANNEL_ID_HERE" # ဥပမာ: "-100123456789" သို့မဟုတ် "@mychannel"
 
 bot = Bot(token=TELEGRAM_BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
@@ -35,7 +35,6 @@ BASE_HEADERS = {
     'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36',
 }
 
-# 🤖 Auto-Bet Settings
 AUTO_BET_ENABLED = False
 MULTIPLIERS = [1, 2, 5, 10, 22] 
 BASE_BET = 10                   
@@ -45,7 +44,6 @@ LAST_BET_ISSUE = ""
 LAST_BET_CHOICE = "" 
 LAST_BET_AMOUNT = 0
 
-# 📈 AI Win Rate Tracking
 LAST_AI_ISSUE = ""
 LAST_AI_CHOICE = ""
 WIN_HISTORY = [] 
@@ -58,17 +56,17 @@ async def login_and_get_token(session: aiohttp.ClientSession):
     print("🔐 အကောင့်ထဲသို့ Login ဝင်နေပါသည်...")
     
     json_data = {
-    'username': '959680090540',
-    'pwd': 'Mitheint11',
-    'phonetype': 1,
-    'logintype': 'mobile',
-    'packId': '',
-    'deviceId': '51ed4ee0f338a1bb24063ffdfcd31ce6',
-    'language': 7,
-    'random': '026e324cf3d14440b8c261ad356610a6',
-    'signature': '842781239D9D89DCEF83A2E5480C7890',
-    'timestamp': 1772963120,
-}
+        'username': USERNAME,
+        'pwd': PASSWORD,
+        'phonetype': 1,
+        'logintype': 'mobile',
+        'packId': '',
+        'deviceId': '51ed4ee0f338a1bb24063ffdfcd31ce6',
+        'language': 7,
+        'random': 'ff109783d75d4f66ad43a183a8f6262c',
+        'signature': '6BBF3B73F5E20F94FA97CFA949375728',
+        'timestamp': 1772965865, 
+    }
 
     try:
         async with session.post('https://api.bigwinqaz.com/api/webapi/Login', headers=BASE_HEADERS, json=json_data) as response:
@@ -92,20 +90,14 @@ async def get_user_balance(session: aiohttp.ClientSession):
 
     headers = BASE_HEADERS.copy()
     headers['authorization'] = CURRENT_TOKEN
-
-    json_data = {
-        'signature': '98BA4B555CD283B47C8F9F6C800DF741',
-        'language': 7,
-        'random': 'd36e1e8dadca4bdd8d5f2e08f1b06c56',
-        'timestamp': 1772963120,
-    }
+    json_data = {'signature': '98BA4B555CD283B47C8F9F6C800DF741', 'language': 7, 'random': 'd36e1e8dadca4bdd8d5f2e08f1b06c56', 'timestamp': 1772963120}
 
     try:
         async with session.post('https://api.bigwinqaz.com/api/webapi/GetUserInfo', headers=headers, json=json_data) as response:
             data = await response.json()
             if data.get('code') == 0:
                 return data.get('data', {}).get('amount', '0.00')
-            elif data.get('code') == 401 or "token" in str(data.get('msg')).lower():
+            elif data.get('code') == 401:
                 CURRENT_TOKEN = ""
                 return await get_user_balance(session)
     except Exception: pass
@@ -116,7 +108,8 @@ async def place_bet(session: aiohttp.ClientSession, issue: str, choice: str, tot
     headers = BASE_HEADERS.copy()
     headers['authorization'] = CURRENT_TOKEN
     
-    select_id = 14 if choice == "BIG" else 15 
+    # 🎯 အသေး(SMALL)=14, အကြီး(BIG)=15 ဟု သတ်မှတ်ထားပါသည်
+    select_id = 15 if choice == "BIG" else 14 
     bet_count = total_amount // 10
     
     json_data = {
@@ -154,16 +147,7 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
 
     headers = BASE_HEADERS.copy()
     headers['authorization'] = CURRENT_TOKEN
-
-    json_data = {
-        'pageSize': 30, 
-        'pageNo': 1,
-        'typeId': 30,
-        'language': 7,
-        'random': '85b82082418845c593a2641ae50af6de',
-        'signature': 'E7C0AAF6D1B429E89F83CA6FDBF3D4FC',
-        'timestamp': 1772962173, 
-    }
+    json_data = {'pageSize': 30, 'pageNo': 1, 'typeId': 30, 'language': 7, 'random': '85b82082418845c593a2641ae50af6de', 'signature': 'E7C0AAF6D1B429E89F83CA6FDBF3D4FC', 'timestamp': 1772962173}
 
     try:
         async with session.post('https://api.bigwinqaz.com/api/webapi/GetNoaverageEmerdList', headers=headers, json=json_data) as response:
@@ -183,9 +167,6 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                 next_issue = str(int(latest_issue) + 1)
                 actual_result = "BIG" if latest_num >= 5 else "SMALL"
                 
-                # ---------------------------------------------
-                # 📈 1. AI Win Rate Tracking
-                # ---------------------------------------------
                 if LAST_AI_ISSUE == latest_issue:
                     WIN_HISTORY.append(1 if actual_result == LAST_AI_CHOICE else 0)
                     if len(WIN_HISTORY) > 20: WIN_HISTORY.pop(0)
@@ -194,15 +175,9 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                 if len(WIN_HISTORY) > 0:
                     t_played = len(WIN_HISTORY)
                     t_won = sum(WIN_HISTORY)
-                    t_lost = t_played - t_won
                     win_pct = (t_won / t_played) * 100
-                    win_rate_msg = f"📈 <b>Win Rate (Last {t_played}):</b> <code>{win_pct:.0f}%</code> ({t_won}W - {t_lost}L)\n"
-                else:
-                    win_rate_msg = f"📈 <b>Win Rate:</b> <code>တွက်ချက်နေဆဲ...</code>\n"
+                    win_rate_msg = f"📈 <b>Win Rate (Last {t_played}):</b> <code>{win_pct:.0f}%</code> ({t_won}W - {t_played-t_won}L)\n"
 
-                # ---------------------------------------------
-                # 🏆 2. Check Auto-Bet Result
-                # ---------------------------------------------
                 bet_result_msg = ""
                 if AUTO_BET_ENABLED and LAST_BET_ISSUE == latest_issue:
                     if actual_result == LAST_BET_CHOICE:
@@ -216,9 +191,6 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                         else:
                             bet_result_msg = f"📉 <b>လောင်းကြေးရလဒ်:</b> ရှုံးပါသည်။ နောက်တစ်ဆင့် ({MULTIPLIERS[CURRENT_STEP]}ဆ) သို့ တက်ပါမည်။\n"
 
-                # ---------------------------------------------
-                # 🧠 3. Advanced AI Predict
-                # ---------------------------------------------
                 history = ["B" if int(item["number"]) >= 5 else "S" for item in records]
                 latest_result = history[0]
 
@@ -257,24 +229,15 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                 LAST_AI_ISSUE = next_issue
                 LAST_AI_CHOICE = ai_raw_choice
 
-                # ---------------------------------------------
-                # 💸 4. Execute Auto-Bet
-                # ---------------------------------------------
                 bet_info_msg = ""
                 if AUTO_BET_ENABLED:
                     amount = BASE_BET * MULTIPLIERS[CURRENT_STEP]
                     await place_bet(session, next_issue, ai_raw_choice, amount) 
-                    
-                    LAST_BET_ISSUE = next_issue
-                    LAST_BET_CHOICE = ai_raw_choice
-                    LAST_BET_AMOUNT = amount
+                    LAST_BET_ISSUE, LAST_BET_CHOICE, LAST_BET_AMOUNT = next_issue, ai_raw_choice, amount
                     bet_info_msg = f"⚙️ <b>Auto-Bet :</b> <code>{amount} Ks</code> လောင်းထားပါသည်။\n"
                 
                 current_balance = await get_user_balance(session)
-                
-                # ---------------------------------------------
-                # 💬 5. Telegram Broadcast
-                # ---------------------------------------------
+
                 print(f"✅ [NEW] ပွဲစဉ်: {latest_issue} -> 🤖 Predict: {display_predict}")
 
                 tg_message = (
@@ -284,21 +247,18 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                     f"🤖 <b>AI ခန့်မှန်းချက် :</b> <b>{display_predict}</b>\n"
                     f"💡 <b>အကြောင်းပြချက် :</b> {reason}\n"
                     f"━━━━━━━━━━━━━━━━━━\n"
-                    f"{win_rate_msg}"
-                    f"{bet_result_msg}"
-                    f"{bet_info_msg}"
-                    f"💰 <i>အကောင့်လက်ကျန်: {current_balance} Ks</i>\n"
+                    f"{win_rate_msg}{bet_result_msg}{bet_info_msg}"
+                    f"💰 <i>အကောင့်လက်ကျန်: {current_balance} Ks</i>"
                 )
                 
-                try: await bot.send_message(chat_id=TELEGRAM_CHANNEL_ID, text=tg_message)
-                except Exception as e: print(f"❌ Bot Error: {e}")
+                try: 
+                    await bot.send_message(chat_id=TELEGRAM_CHANNEL_ID, text=tg_message)
+                except Exception as e: 
+                    print(f"❌ Bot Error: Channel သို့ ပို့၍မရပါ။ Channel ID နှင့် Token ကို စစ်ဆေးပါ! Error details: {e}")
                 
-            elif data.get('code') == 401 or "token" in str(data.get('msg')).lower():
-                print("⚠️ Token Expired.")
+            elif data.get('code') == 401:
                 CURRENT_TOKEN = ""
-                
-    except Exception as e:
-        print(f"❌ Game Request Error: {e}")
+    except Exception as e: print(f"❌ Fetch Error: {e}")
 
 # ==========================================
 # 🔄 4. BACKGROUND TASK
@@ -315,42 +275,27 @@ async def auto_broadcaster():
 # ==========================================
 @dp.message(Command("start"))
 async def send_welcome(message: types.Message):
-    await message.reply(
-        "👋 မင်္ဂလာပါ။ Bigwin Pro-AI Bot မှ ကြိုဆိုပါတယ်။\n\n"
-        "/status - အခြေအနေကြည့်ရန်\n"
-        "/autoon - အလိုအလျောက်လောင်းမည်\n"
-        "/autooff - အလိုအလျောက်လောင်းခြင်း ပိတ်မည်"
-    )
+    await message.reply("👋 Bigwin Pro-AI Bot မှ ကြိုဆိုပါတယ်။\n/status | /autoon | /autooff")
 
 @dp.message(Command("autoon"))
 async def turn_auto_on(message: types.Message):
     global AUTO_BET_ENABLED, CURRENT_STEP
     AUTO_BET_ENABLED = True
     CURRENT_STEP = 0 
-    await message.reply("✅ <b>Auto-Bet ဖွင့်လိုက်ပါပြီ!</b>\nနောက်ပွဲစဉ်မှစ၍ အလိုအလျောက် လောင်းကြေးထပ်ပါမည်။")
+    await message.reply("✅ Auto-Bet ဖွင့်လိုက်ပါပြီ!")
 
 @dp.message(Command("autooff"))
 async def turn_auto_off(message: types.Message):
     global AUTO_BET_ENABLED
     AUTO_BET_ENABLED = False
-    await message.reply("❌ <b>Auto-Bet ပိတ်လိုက်ပါပြီ!</b>")
+    await message.reply("❌ Auto-Bet ပိတ်လိုက်ပါပြီ!")
 
 @dp.message(Command("status"))
 async def check_status(message: types.Message):
     async with aiohttp.ClientSession() as session:
         balance = await get_user_balance(session)
         auto_status = "🟢 ဖွင့်ထားသည်" if AUTO_BET_ENABLED else "🔴 ပိတ်ထားသည်"
-        current_mult = MULTIPLIERS[CURRENT_STEP] if AUTO_BET_ENABLED else 0
-        
-        status_text = (
-            f"📊 <b>System Status</b>\n"
-            f"━━━━━━━━━━━━━━\n"
-            f"🔹 <b>Account :</b> <code>{USERNAME}</code>\n"
-            f"🔹 <b>Balance :</b> <code>{balance}</code> Ks\n"
-            f"🔹 <b>Auto-Bet :</b> {auto_status}\n"
-            f"🔹 <b>Current Step:</b> {current_mult} ဆ\n"
-        )
-        await message.reply(status_text)
+        await message.reply(f"📊 <b>Account:</b> <code>{USERNAME}</code>\n💰 <b>Balance:</b> {balance} Ks\n⚙️ <b>Auto-Bet:</b> {auto_status}")
 
 # ==========================================
 # 🚀 6. MAIN EXECUTION
