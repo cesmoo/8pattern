@@ -11,11 +11,11 @@ from aiogram.client.default import DefaultBotProperties
 # ⚙️ 1. CONFIGURATION (ဒီနေရာမှာ သေချာပြင်ပါ)
 # ==========================================
 USERNAME = "959680090540" # ပုံ ၆ အရ အလုပ်လုပ်နေသော အကောင့်
-PASSWORD = "YOUR_PASSWORD"  # ⚠️ သင့် Password အမှန်ထည့်ပါ
+PASSWORD = "Mitheint11"  # ⚠️ သင့် Password အမှန်ထည့်ပါ
 
 # ⚠️ အရင်က စာပို့လို့ရခဲ့တဲ့ Token နဲ့ Channel ID အဟောင်းကို ဒီမှာ အတိအကျ ပြန်ထည့်ပါ ⚠️
-TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN_HERE" 
-TELEGRAM_CHANNEL_ID = "YOUR_CHANNEL_ID_HERE" # ဥပမာ: "-100123456789" သို့မဟုတ် "@mychannel"
+TELEGRAM_BOT_TOKEN = "8682629146:AAGQwoKW0DM6LPeY4rQMjv_X41hkNfuQ6D0" 
+TELEGRAM_CHANNEL_ID = "-1003803022333" # ဥပမာ: "-100123456789" သို့မဟုတ် "@mychannel"
 
 bot = Bot(token=TELEGRAM_BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
