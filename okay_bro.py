@@ -71,9 +71,10 @@ async def init_db():
 # ==========================================
 async def login_and_get_token(session: aiohttp.ClientSession):
     global CURRENT_TOKEN
+    print("🔐 အကောင့်ထဲသို့ Login ဝင်နေပါသည်...")
     json_data = {
-        'username': '959675323878',
-        'pwd': 'Mitheint11',
+        'username': USERNAME, 
+        'pwd': PASSWORD,
         'phonetype': 1,
         'logintype': 'mobile',
         'packId': '',
@@ -93,13 +94,15 @@ async def login_and_get_token(session: aiohttp.ClientSession):
                 CURRENT_TOKEN = f"Bearer {token_str}"
                 print("✅ Login အောင်မြင်ပါသည်။\n")
                 return True
-            return False
+            else:
+                print(f"❌ Login Failed: {data.get('msg')}")
+                return False
     except Exception as e:
-        print(f"❌ Login Error: {e}")
+        print(f"❌ Login Request Error: {e}")
         return False
 
 # ==========================================
-# 🧠 5. AI PREDICTION & WIN RATE LOGIC
+# 🧠 5. AI PREDICTION LOGIC
 # ==========================================
 async def check_game_and_predict(session: aiohttp.ClientSession):
     global CURRENT_TOKEN, LAST_PROCESSED_ISSUE, LAST_PREDICTED_ISSUE, LAST_PREDICTED_RESULT
@@ -142,7 +145,6 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                 async with aiosqlite.connect(DB_NAME) as db:
                     await db.execute('INSERT OR IGNORE INTO game_history (issue_number, number, size) VALUES (?, ?, ?)', (latest_issue, latest_number, latest_size))
                     
-                    # ၁။ ပြီးခဲ့သော ပွဲစဉ်အတွက် Win/Lose စစ်ဆေးခြင်း
                     if LAST_PREDICTED_ISSUE == latest_issue:
                         is_win = (LAST_PREDICTED_RESULT == latest_size)
                         win_lose_status = "WIN ✅" if is_win else "LOSE ❌"
@@ -155,11 +157,9 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                         )
                     await db.commit()
 
-                    # ၂။ Win Rate Report ပို့ရန် ၅၀ ပြည့်/မပြည့် စစ်ဆေးခြင်း
                     async with db.execute('SELECT COUNT(*) FROM predictions WHERE win_lose IS NOT NULL') as cursor:
                         total_evaluated = (await cursor.fetchone())[0]
 
-                    # အဖြေထွက်ပြီးသော ပွဲစဉ်အရေအတွက်သည် ၅၀ ဆတိုးဖြစ်လျှင် Report ပို့မည်
                     if total_evaluated > 0 and total_evaluated % 50 == 0 and LAST_PREDICTED_ISSUE == latest_issue:
                         async with db.execute('SELECT win_lose FROM predictions WHERE win_lose IS NOT NULL ORDER BY issue_number DESC LIMIT 50') as cursor:
                             last_50_results = await cursor.fetchall()
@@ -175,15 +175,12 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                             f"❌ <b>ရှုံးပွဲ (Losses) :</b> {losses} ပွဲ\n"
                             f"📊 <b>Win Rate :</b> <b>{win_rate:.1f}%</b>\n"
                             f"━━━━━━━━━━━━━━━━━━\n"
-                            f"🤖 <i>AI စနစ်၏ နောက်ဆုံး ပွဲ ၅၀ အပေါ် စွမ်းဆောင်ရည် ဖြစ်ပါသည်။</i>"
                         )
                         try:
                             await bot.send_message(chat_id=TELEGRAM_CHANNEL_ID, text=stats_msg)
-                            print(f"📈 50 Games Stats Sent: {wins}W - {losses}L ({win_rate}%)")
                         except Exception as e:
                             print(f"❌ Telegram Stats Send Error: {e}")
 
-                    # ၃။ AI တွက်ချက်ခြင်းအတွက် ပွဲ ၅၀ ပြန်ဆွဲထုတ်ခြင်း
                     async with db.execute('SELECT size FROM game_history ORDER BY issue_number DESC LIMIT 50') as cursor:
                         history = await cursor.fetchall()
                 
@@ -218,6 +215,8 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                     await db.execute('INSERT INTO predictions (issue_number, predicted_size, probability) VALUES (?, ?, ?)', (next_issue, LAST_PREDICTED_RESULT, final_prob))
                     await db.commit()
 
+                print(f"✅ [NEW] ပွဲစဉ်: {next_issue} -> AI Predict: {predicted}")
+
                 tg_message = (
                     f"🎰 <b>Bigwin 30-Seconds (AI)</b>\n"
                     f"━━━━━━━━━━━━━━━━━━\n"
@@ -232,31 +231,93 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                 try:
                     await bot.send_message(chat_id=TELEGRAM_CHANNEL_ID, text=tg_message)
                 except Exception as e:
-                    pass
+                    print(f"❌ Telegram Send Error: {e}")
 
             elif data.get('code') == 401:
                 CURRENT_TOKEN = ""
                 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Check Game Error: {e}")
 
 # ==========================================
-# 🔄 6. BACKGROUND TASK
+# 🔄 6. BACKGROUND TASK (Error Tracking ထည့်ထားသည်)
 # ==========================================
 async def auto_broadcaster():
-    await init_db()
+    try:
+        print("🗄 Database ကို စတင်နေပါသည်...")
+        await init_db()
+        print("✅ Database အဆင်သင့်ဖြစ်ပါပြီ။")
+    except Exception as db_err:
+        print(f"❌ Database Setup Error: {db_err}")
+        return # Database error တက်ပါက ဆက်မလုပ်ပါ
+
     async with aiohttp.ClientSession() as session:
         while True:
-            await check_game_and_predict(session)
+            try:
+                await check_game_and_predict(session)
+            except Exception as e:
+                print(f"❌ Broadcaster Loop Error: {e}")
             await asyncio.sleep(5)
 
 # ==========================================
-# 🚀 7. MAIN EXECUTION
+# 🤖 7. BOT HANDLERS (Private Chat Commands)
+# ==========================================
+@dp.message(Command("start"))
+async def send_welcome(message: types.Message):
+    await message.reply(
+        "👋 မင်္ဂလာပါ။ Bigwin AI Predictor Bot မှ ကြိုဆိုပါတယ်။\n\n"
+        "စနစ်က နောက်ကွယ်မှာ အလိုအလျောက် အလုပ်လုပ်နေပြီး Channel ထဲကို ခန့်မှန်းချက်များ ပို့ပေးနေပါတယ်။\n\n"
+        "📊 လက်ရှိ Win Rate မှတ်တမ်းကို ကြည့်လိုပါက /stats ကို နှိပ်ပါ။"
+    )
+
+@dp.message(Command("stats"))
+async def check_stats(message: types.Message):
+    loading_msg = await message.reply("🔄 အချက်အလက်များ ဆွဲယူနေပါသည်...")
+    try:
+        async with aiosqlite.connect(DB_NAME) as db:
+            async with db.execute('SELECT COUNT(*) FROM predictions WHERE win_lose IS NOT NULL') as cursor:
+                total = (await cursor.fetchone())[0]
+                
+            if total == 0:
+                await loading_msg.edit_text("⚠️ ယခုလောလောဆယ် Win Rate တွက်ချက်ရန် အချက်အလက် မရှိသေးပါ။ ခဏစောင့်ပေးပါ။")
+                return
+
+            async with db.execute('SELECT win_lose FROM predictions WHERE win_lose IS NOT NULL ORDER BY issue_number DESC LIMIT 50') as cursor:
+                last_50_results = await cursor.fetchall()
+            
+            wins = sum(1 for row in last_50_results if "WIN" in row[0])
+            total_eval = len(last_50_results)
+            losses = total_eval - wins
+            win_rate = (wins / total_eval) * 100 if total_eval > 0 else 0
+
+            stats_msg = (
+                f"📈 <b>နောက်ဆုံး ပွဲစဉ် ({total_eval}) ခုအတွက် မှတ်တမ်း</b>\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"✅ <b>နိုင်ပွဲ (Wins) :</b> {wins} ပွဲ\n"
+                f"❌ <b>ရှုံးပွဲ (Losses) :</b> {losses} ပွဲ\n"
+                f"📊 <b>Win Rate :</b> <b>{win_rate:.1f}%</b>\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+            )
+            await loading_msg.edit_text(stats_msg)
+    except Exception as e:
+        await loading_msg.edit_text("❌ Database မှတ်တမ်း ယူရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ခဲ့ပါသည်။")
+        print(f"❌ Stats Command Error: {e}")
+
+# ==========================================
+# 🚀 8. MAIN EXECUTION
 # ==========================================
 async def main():
     print("🚀 AI Predictor Bot စတင်နေပါပြီ...\n")
+    
+    # ⚠️ Webhook ငြိနေပါက ဖြုတ်ရန် (Bot /start မတုံ့ပြန်သော ပြဿနာကို ဖြေရှင်းရန်)
+    await bot.delete_webhook(drop_pending_updates=True)
+    
     asyncio.create_task(auto_broadcaster())
-    await dp.start_polling(bot)
+    
+    try:
+        await dp.start_polling(bot)
+    except Exception as e:
+        print(f"❌ Polling Error: {e}")
 
 if __name__ == '__main__':
     try:
