@@ -109,13 +109,16 @@ async def login_and_get_token(session: aiohttp.ClientSession):
     print("🔐 အကောင့်ထဲသို့ Login ဝင်နေပါသည်...")
     
     json_data = {
-        'username': USERNAME,
-        'pwd': PASSWORD,
+        'username': '959680090540',
+        'pwd': 'Mitheint11',
         'phonetype': 1,
         'logintype': 'mobile',
         'packId': '',
         'deviceId': '51ed4ee0f338a1bb24063ffdfcd31ce6',
-        'language': 7
+        'language': 7,
+        'random': 'd85ed31c80a9447d9c2eb8e713b6046d',
+        'signature': 'EAEF4EF352C07BF7852E39B5AB2F4151',
+        'timestamp': 1772969564,
     }
     # Signature Auto Generate လုပ်မည်
     signed_data = sign_payload(json_data)
