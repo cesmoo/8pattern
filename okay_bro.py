@@ -191,7 +191,7 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                 
                 MAX_PATTERN_LENGTH = 10
                 MIN_PATTERN_LENGTH = 10
-                pattern_found = False
+                pattern_found = True
                 
                 for current_len in range(MAX_PATTERN_LENGTH, MIN_PATTERN_LENGTH - 1, -1):
                     if len(all_history) > current_len:
