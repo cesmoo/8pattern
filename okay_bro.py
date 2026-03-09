@@ -189,9 +189,9 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                 base_prob = 55.0
                 reason = "Pattern အသစ်ဖြစ်နေသဖြင့် သမိုင်းကြောင်းအရ တွက်ချက်ထားသည်"
                 
-                MAX_PATTERN_LENGTH = 7
-                MIN_PATTERN_LENGTH = 7
-                pattern_found = True
+                MAX_PATTERN_LENGTH = 11
+                MIN_PATTERN_LENGTH = 11
+                pattern_found = False
                 
                 for current_len in range(MAX_PATTERN_LENGTH, MIN_PATTERN_LENGTH - 1, -1):
                     if len(all_history) > current_len:
