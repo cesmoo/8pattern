@@ -35,18 +35,20 @@ history_collection = db['game_history']
 predictions_collection = db['predictions'] 
 
 # ==========================================
-# 🔧 2. SYSTEM & STREAK VARIABLES 
+# 🔧 2. SYSTEM & TRACKING VARIABLES 
 # ==========================================
 CURRENT_TOKEN = ""
 LAST_PROCESSED_ISSUE = ""
 LAST_PREDICTED_ISSUE = ""
 LAST_PREDICTED_RESULT = ""
 
-# --- Streak Tracking ---
+# --- Streak & Stats Tracking ---
+# (Host Restart လုပ်တိုင်း 0 မှ ပြန်စမည်)
 CURRENT_WIN_STREAK = 0
 CURRENT_LOSE_STREAK = 0
 LONGEST_WIN_STREAK = 0
 LONGEST_LOSE_STREAK = 0
+TOTAL_PREDICTIONS = 0 
 
 BASE_HEADERS = {
     'authority': 'api.bigwinqaz.com',
@@ -80,11 +82,10 @@ async def login_and_get_token(session: aiohttp.ClientSession):
         'packId': '',
         'deviceId': '51ed4ee0f338a1bb24063ffdfcd31ce6',
         'language': 7,
-        'random': '415e8bcd91ef4987966b9e9282ee51b8',
-        'signature': 'D2FE1384ABF1D7D27E8D7AF63437DA2B',
-        'timestamp': 1772990082,
+        'random': '452fa309995244de92103c0afbefbe9a',
+        'signature': '202C655177E9187D427A26F3CDC00A52',
+        'timestamp': 1773021618,
     }
-
     try:
         async with session.post('https://api.bigwinqaz.com/api/webapi/Login', headers=BASE_HEADERS, json=json_data) as response:
             data = await response.json()
@@ -120,7 +121,7 @@ async def get_user_balance(session: aiohttp.ClientSession):
 # ==========================================
 async def check_game_and_predict(session: aiohttp.ClientSession):
     global CURRENT_TOKEN, LAST_PROCESSED_ISSUE, LAST_PREDICTED_ISSUE, LAST_PREDICTED_RESULT
-    global CURRENT_WIN_STREAK, CURRENT_LOSE_STREAK, LONGEST_WIN_STREAK, LONGEST_LOSE_STREAK
+    global CURRENT_WIN_STREAK, CURRENT_LOSE_STREAK, LONGEST_WIN_STREAK, LONGEST_LOSE_STREAK, TOTAL_PREDICTIONS
     
     if not CURRENT_TOKEN:
         if not await login_and_get_token(session): return
@@ -155,6 +156,7 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                 # --- နိုင်/ရှုံး စစ်ဆေးခြင်း နှင့် Streak တွက်ချက်ခြင်း ---
                 if LAST_PREDICTED_ISSUE == latest_issue:
                     is_win = (LAST_PREDICTED_RESULT == latest_size)
+                    TOTAL_PREDICTIONS += 1 # ခန့်မှန်းပြီးတိုင်း 1 တိုးမည်
                     
                     if is_win:
                         win_lose_status = "WIN ✅"
@@ -187,9 +189,9 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                 base_prob = 55.0
                 reason = "Pattern အသစ်ဖြစ်နေသဖြင့် သမိုင်းကြောင်းအရ တွက်ချက်ထားသည်"
                 
-                MAX_PATTERN_LENGTH = 9
-                MIN_PATTERN_LENGTH = 9
-                pattern_found = True
+                MAX_PATTERN_LENGTH = 10
+                MIN_PATTERN_LENGTH = 10
+                pattern_found = False
                 
                 for current_len in range(MAX_PATTERN_LENGTH, MIN_PATTERN_LENGTH - 1, -1):
                     if len(all_history) > current_len:
@@ -250,11 +252,13 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                     f"💡 <b>အကြောင်းပြချက် :</b>\n"
                     f"{reason}\n"
                     f"━━━━━━━━━━━━━━━━━━\n"
-                    f"Current Win Streak : {CURRENT_WIN_STREAK}\n"
-                    f"Current Lose Streak : {CURRENT_LOSE_STREAK}\n"
+                    f"Cᴜʀʀᴇɴᴛ Wɪɴ Sᴛʀᴇᴀᴋ : {CURRENT_WIN_STREAK}\n"
+                    f"Cᴜʀʀᴇɴᴛ Wɪɴ Sᴛʀᴇᴀᴋ : {CURRENT_LOSE_STREAK}\n"
                     f"━━━━━━━━━━━━━━━━━━\n"
-                    f"Longest Win Streak : {LONGEST_WIN_STREAK}\n"
-                    f"Longest Lose Streak : {LONGEST_LOSE_STREAK}"
+                    f"Lᴏɴɢᴇsᴛ Wɪɴ Sᴛʀᴇᴀᴋ : {LONGEST_WIN_STREAK}\n"
+                    f"Lᴏɴɢᴇsᴛ Lᴏsᴇ Sᴛʀᴇᴀᴋ : {LONGEST_LOSE_STREAK}\n"
+                    f"━━━━━━━━━━━━━━━━━━\n"
+                    f"Tᴏᴛᴀʟ Pʀᴇᴅɪᴄᴛɪᴏɴs : {TOTAL_PREDICTIONS}"
                 )
                 
                 try: await bot.send_message(chat_id=TELEGRAM_CHANNEL_ID, text=tg_message)
