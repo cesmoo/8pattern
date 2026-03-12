@@ -18,4 +18,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Bot ကို စတင် Run မည့် Command
-CMD ["python", "bigboss.py"]
+CMD ["python", "8pattern.py"]
