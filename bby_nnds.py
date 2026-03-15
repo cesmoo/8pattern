@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 
 import aiohttp
 import motor.motor_asyncio 
-from pymongo.errors import ConnectionFailure
 
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
@@ -21,7 +20,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # ==========================================
-# ⚙️ MODULE 1: CONFIGURATION & LOGGING
+# ⚙️ MODULE 1: CONFIGURATION & GLOBALS
 # ==========================================
 load_dotenv()
 
@@ -40,7 +39,7 @@ class Config:
     WIN_STICKER = ""  # ဥပမာ: "CAACAgUAAxkBAAE..."
     LOSE_STICKER = "" 
     
-    # Custom Multiplier Strategy
+    # Custom Multiplier Strategy (1x, 2x, 3x, 4x, 5x, 6x...)
     MULTIPLIERS = [1, 2, 3, 5, 8, 15, 30, 50]
     
     # API Headers
@@ -50,6 +49,10 @@ class Config:
         'content-type': 'application/json;charset=UTF-8', 'origin': 'https://www.6win566.com',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
     }
+
+# 💡 [FIXED] Bot နှင့် Dispatcher ကို မှန်ကန်စွာ ဖန်တီးထားပါသည်
+bot = Bot(token=Config.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+dp = Dispatcher()
 
 # ==========================================
 # 🗄️ MODULE 2: DATABASE MANAGER
@@ -243,19 +246,12 @@ class UltimateAIEngine:
         return final_pred, round(confidence, 1)
 
 # ==========================================
-# 💰 MODULE 5: BETTING & UI MANAGER
+# 💰 MODULE 5: UI & BOT MANAGER
 # ==========================================
-class BettingStrategy:
-    @staticmethod
-    def get_multiplier(lose_streak: int) -> int:
-        if lose_streak >= len(Config.MULTIPLIERS):
-            return Config.MULTIPLIERS[0]
-        return Config.MULTIPLIERS[lose_streak]
-
 class TelegramUI:
     """ Telegram သို့ မက်ဆေ့ချ်များ ပို့ခြင်းကို သီးသန့် စီမံခြင်း """
-    def __init__(self, bot: Bot):
-        self.bot = bot
+    def __init__(self, bot_instance: Bot):
+        self.bot = bot_instance
 
     async def send_prediction(self, issue: str, pred: str, step: int, conf: float, top_model: str):
         msg = (
@@ -355,13 +351,11 @@ class GameController:
 
                     # 2. ပွဲစဉ်အသစ် တွေ့ရှိသောအခါ (New Issue Detected)
                     if int(issue) > int(self.last_issue):
-                        # Save History
                         await self.db.save_history(issue, number, size, parity)
                         
                         # Self-Learning Update
                         self.ai.optimizer.learn_from_result(size, self.ai.last_predictions)
                         
-                        # Check Previous Prediction
                         recent_preds = await self.db.get_recent_predictions(1)
                         if recent_preds and recent_preds[0]['issue_number'] == issue:
                             pred_doc = recent_preds[0]
@@ -369,10 +363,7 @@ class GameController:
                             is_win = (predicted_size == size)
                             win_lose_db = "WIN" if is_win else "LOSE"
                             
-                            # Update DB Result
                             await self.db.update_result(issue, size, number, win_lose_db)
-                            
-                            # UI အား Result ပို့ခိုင်းခြင်း
                             await self.ui.send_result(issue, predicted_size, self.current_step, is_win, size, number)
                             
                             # Streak ပြင်ဆင်ခြင်း
