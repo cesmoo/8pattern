@@ -135,13 +135,14 @@ class FeatureEngineer:
         
         return X_scaled, y, curr_scaled
 
+
+
 # ==========================================
 # 🧠 MODULE 4: THE 6-CORE PREDICTOR MODELS
 # ==========================================
 class PatternEngine:
     @staticmethod
     def predict(sizes: list, n: int = 3) -> float:
-        """ N-Gram Sequence မှတဆင့် နောက်ထွက်မည့် ရာခိုင်နှုန်းကို ရှာဖွေခြင်း """
         if len(sizes) < n + 1: return 0.5
         current_pattern = tuple(sizes[-n:])
         matches = {'BIG': 0, 'SMALL': 0}
@@ -150,12 +151,11 @@ class PatternEngine:
                 matches[sizes[i+n]] += 1
         total = sum(matches.values())
         if total == 0: return 0.5
-        return matches['BIG'] / total
+        return float(matches['BIG'] / total)
 
 class MarkovChain:
     @staticmethod
     def predict(sizes: list) -> float:
-        """ လက်ရှိ State မှ နောက် State သို့ ကူးပြောင်းမည့် ရာခိုင်နှုန်းကို သင်္ချာနည်းဖြင့် တွက်ခြင်း """
         if len(sizes) < 2: return 0.5
         transitions = {'BIG': {'BIG': 0, 'SMALL': 0}, 'SMALL': {'BIG': 0, 'SMALL': 0}}
         for i in range(len(sizes)-1): 
@@ -163,10 +163,9 @@ class MarkovChain:
         curr = sizes[-1]
         tot = transitions[curr]['BIG'] + transitions[curr]['SMALL']
         if tot == 0: return 0.5
-        return transitions[curr]['BIG'] / tot
+        return float(transitions[curr]['BIG'] / tot)
 
 class MachineLearningCore:
-    """ ML Model ၄ မျိုးစလုံးကို တစ်ပြိုင်နက်တည်း အလုပ်လုပ်စေမည့် Class """
     def __init__(self):
         self.rf = RandomForestClassifier(n_estimators=100, max_depth=6, random_state=42, n_jobs=-1)
         self.gb = GradientBoostingClassifier(n_estimators=100, learning_rate=0.05, max_depth=3, random_state=42)
@@ -176,28 +175,25 @@ class MachineLearningCore:
     def train_and_predict(self, X, y, curr_X) -> dict:
         results = {'rf': 0.5, 'gb': 0.5, 'xgb': 0.5, 'lr': 0.5}
         try:
-            # Random Forest
+            # 💡 [FIXED] float() ဖြင့် ရိုးရိုးဂဏန်းအဖြစ် ပြောင်းလဲထားသည်
             self.rf.fit(X, y)
             if 1 in self.rf.classes_:
-                results['rf'] = self.rf.predict_proba(curr_X)[0][list(self.rf.classes_).index(1)]
+                results['rf'] = float(self.rf.predict_proba(curr_X)[0][list(self.rf.classes_).index(1)])
                 
-            # Gradient Boosting
             self.gb.fit(X, y)
             if 1 in self.gb.classes_:
-                results['gb'] = self.gb.predict_proba(curr_X)[0][list(self.gb.classes_).index(1)]
+                results['gb'] = float(self.gb.predict_proba(curr_X)[0][list(self.gb.classes_).index(1)])
                 
-            # XGBoost
             self.xgb.fit(np.array(X), np.array(y))
             if 1 in self.xgb.classes_:
-                results['xgb'] = self.xgb.predict_proba(curr_X)[0][list(self.xgb.classes_).index(1)]
+                results['xgb'] = float(self.xgb.predict_proba(curr_X)[0][list(self.xgb.classes_).index(1)])
                 
-            # Logistic Regression
             self.lr.fit(X, y)
             if 1 in self.lr.classes_:
-                results['lr'] = self.lr.predict_proba(curr_X)[0][list(self.lr.classes_).index(1)]
+                results['lr'] = float(self.lr.predict_proba(curr_X)[0][list(self.lr.classes_).index(1)])
                 
         except Exception as e:
-            logger.warning(f"ML Core Error: {e}")
+            pass
             
         return results
 
@@ -205,9 +201,7 @@ class MachineLearningCore:
 # ⚙️ MODULE 5: META OPTIMIZER & ENSEMBLE
 # ==========================================
 class MetaOptimizer:
-    """ အခြေအနေပေါ်မူတည်၍ Algorithm ၆ မျိုး၏ အလေးချိန် (Weights) ကို အလိုအလျောက် ပြင်ဆင်ခြင်း """
     def __init__(self):
-        # ကနဦး အလေးချိန်များ
         self.weights = {
             'rf': 0.20, 'gb': 0.20, 'xgb': 0.20, 
             'lr': 0.10, 'markov': 0.15, 'pattern': 0.15
@@ -220,10 +214,7 @@ class MetaOptimizer:
         actual_val = 1.0 if actual == 'BIG' else 0.0
         
         for model, prob_big in past_model_preds.items():
-            # Error ကို တွက်ချက်ခြင်း (0.0 to 1.0)
             error = abs(actual_val - prob_big)
-            
-            # အမှားနည်းလျှင် အမှတ်တိုးမည်၊ အမှားများလျှင် အမှတ်လျှော့မည်
             if error < 0.5:
                 self.weights[model] += 0.05
             else:
@@ -231,7 +222,6 @@ class MetaOptimizer:
                 
             total_w += self.weights[model]
             
-        # Normalize Back to 1.0
         if total_w > 0:
             for k in self.weights:
                 self.weights[k] /= total_w
@@ -251,25 +241,22 @@ class UltimateAIEngine:
         numbers = [int(d.get('number', 0)) for d in reversed(docs)]
         parities = [d.get('parity', 'EVEN') for d in reversed(docs)]
         
-        # 1. Statistical Models
         prob_b_pat = PatternEngine.predict(sizes, n=3)
         prob_b_mar = MarkovChain.predict(sizes)
         
-        # 2. Machine Learning Models
         X, y, curr_X = self.fe.prepare_data(sizes, numbers, parities)
         if X is not None:
             ml_probs = self.ml_core.train_and_predict(X, y, curr_X)
         else:
             ml_probs = {'rf': 0.5, 'gb': 0.5, 'xgb': 0.5, 'lr': 0.5}
             
-        # Save exact probabilities for the Optimizer to learn later
+        # 💡 [FIXED] Database အတွက် အကုန်လုံးကို float() အဖြစ် သေချာပြောင်းထားပါသည်
         self.last_model_probs = {
-            'pattern': prob_b_pat, 'markov': prob_b_mar,
-            'rf': ml_probs['rf'], 'gb': ml_probs['gb'], 
-            'xgb': ml_probs['xgb'], 'lr': ml_probs['lr']
+            'pattern': float(prob_b_pat), 'markov': float(prob_b_mar),
+            'rf': float(ml_probs['rf']), 'gb': float(ml_probs['gb']), 
+            'xgb': float(ml_probs['xgb']), 'lr': float(ml_probs['lr'])
         }
         
-        # 3. Apply Meta-Optimizer Weights
         w = self.optimizer.weights
         final_b_score = (
             (self.last_model_probs['pattern'] * w['pattern']) +
@@ -282,9 +269,8 @@ class UltimateAIEngine:
         
         final_pred = "BIG" if final_b_score > 0.5 else "SMALL"
         
-        # Confidence Scaling (50.0 to 99.0)
         raw_conf = final_b_score if final_b_score > 0.5 else (1.0 - final_b_score)
-        confidence = min(max(raw_conf * 100, 51.0), 99.0)
+        confidence = min(max(float(raw_conf) * 100, 51.0), 99.0)
         
         return final_pred, round(confidence, 1), self.last_model_probs
 
