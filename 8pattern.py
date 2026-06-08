@@ -36,11 +36,11 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
 MONGO_URI = os.getenv("MONGO_URI") 
 
-if not all([TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID, MONGO_URI]):
+if not all([BOT_TOKEN, CHANNEL_ID, MONGO_URI]):
     print("❌ Error: .env ဖိုင်ထဲတွင် အချက်အလက်များ ပြည့်စုံစွာ မပါဝင်ပါ။")
     exit()
   
-bot = Bot(token=TELEGRAM_BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
 # MongoDB Setup
@@ -483,9 +483,9 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                 
                 if MAIN_MESSAGE_ID:
                     media = InputMediaPhoto(media=photo, caption=tg_caption, parse_mode="HTML")
-                    await bot.edit_message_media(chat_id=TELEGRAM_CHANNEL_ID, message_id=MAIN_MESSAGE_ID, media=media)
+                    await bot.edit_message_media(chat_id=CHANNEL_ID, message_id=MAIN_MESSAGE_ID, media=media)
                 else:
-                    msg = await bot.send_photo(chat_id=TELEGRAM_CHANNEL_ID, photo=photo, caption=tg_caption)
+                    msg = await bot.send_photo(chat_id=CHANNEL_ID, photo=photo, caption=tg_caption)
                     MAIN_MESSAGE_ID = msg.message_id
                 
                 LAST_CAPTION_EDIT_TIME = time.time()
@@ -527,7 +527,7 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                 tg_caption = f"⚠️ <b>[API သော့ သက်တမ်းကုန်သွားပါပြီ! အသစ်လဲပေးပါ]</b>\n\n" + tg_caption
 
             try:
-                await bot.edit_message_caption(chat_id=TELEGRAM_CHANNEL_ID, message_id=MAIN_MESSAGE_ID, caption=tg_caption, parse_mode="HTML")
+                await bot.edit_message_caption(chat_id=CHANNEL_ID, message_id=MAIN_MESSAGE_ID, caption=tg_caption, parse_mode="HTML")
                 LAST_CAPTION_EDIT_TIME = time.time()
             except TelegramRetryAfter as e:
                 LAST_CAPTION_EDIT_TIME = time.time() + e.retry_after
