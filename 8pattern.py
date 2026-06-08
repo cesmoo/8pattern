@@ -32,8 +32,8 @@ load_dotenv()
 # ==========================================
 USERNAME = os.getenv("BIGWIN_USERNAME", "959675323878")
 PASSWORD = os.getenv("BIGWIN_PASSWORD", "Mitheint11")
-TELEGRAM_BOT_TOKEN = os.getenv("BOT_TOKEN")
-TELEGRAM_CHANNEL_ID = os.getenv("CHANNEL_ID")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHANNEL_ID = os.getenv("CHANNEL_ID")
 MONGO_URI = os.getenv("MONGO_URI") 
 
 if not all([TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID, MONGO_URI]):
