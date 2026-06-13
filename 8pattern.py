@@ -125,8 +125,8 @@ def dynamic_history_predict(history_docs):
     base_prob = 55.0
     reason = "Pattern အသစ်ဖြစ်နေသဖြင့် သမိုင်းကြောင်းအရ တွက်ချက်ထားသည်"
     
-    MAX_PATTERN_LENGTH = 6
-    MIN_PATTERN_LENGTH = 5  
+    MAX_PATTERN_LENGTH = 9
+    MIN_PATTERN_LENGTH = 7  
     pattern_found = False
     
     for current_len in range(MAX_PATTERN_LENGTH, MIN_PATTERN_LENGTH - 1, -1):
@@ -391,7 +391,7 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                     else: break
 
                 # Alert System (7 Losses)
-                if current_lose_streak >= 7 and LAST_NOTIFIED_ISSUE != latest_issue:
+                if current_lose_streak >= 5 and LAST_NOTIFIED_ISSUE != latest_issue:
                     try:
                         alert_text = (
                             f"🚨 <b>[SYSTEM ALERT] ကြီးမားသော ရှုံးပွဲဆက်မှု!</b>\n\n"
