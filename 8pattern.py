@@ -125,8 +125,8 @@ def dynamic_history_predict(history_docs):
     base_prob = 55.0
     reason = "Pattern အသစ်ဖြစ်နေသဖြင့် သမိုင်းကြောင်းအရ တွက်ချက်ထားသည်"
     
-    MAX_PATTERN_LENGTH = 15
-    MIN_PATTERN_LENGTH = 14  
+    MAX_PATTERN_LENGTH = 10
+    MIN_PATTERN_LENGTH = 9
     pattern_found = False
     
     for current_len in range(MAX_PATTERN_LENGTH, MIN_PATTERN_LENGTH - 1, -1):
