@@ -406,40 +406,152 @@ def generate_winrate_chart(predictions):
     return buf
 
 # ==========================================
-# 🎯 PLACE BET
+# 🎯 PLACE BET (GAMEBETTING ENDPOINT)
 # ==========================================
 async def place_bet(session: aiohttp.ClientSession, predicted_size: str, amount: int):
     global CURRENT_TOKEN
 
     if not CURRENT_TOKEN:
+        debug_log("❌ No token", "ERROR")
         return None
 
+    # Bet direction mapping
     bet_direction = "BIG" if "BIG" in predicted_size else "SMALL"
+    
+    # Game Type mapping
+    game_type_map = {
+        "1min": 1,
+        "3min": 2,
+        "5min": 3,
+        "30s": 4,
+        "trx": 5
+    }
+    
+    game_type = game_type_map.get(AUTO_BET["game_type"], 1)
+    
+    # Select Type mapping: BIG = 13, SMALL = 14
+    select_type = 13 if bet_direction == "BIG" else 14
+
+    debug_log(f"🎯 Placing bet: {bet_direction}, Amount: {amount}, GameType: {game_type}")
 
     headers = BROWSER_HEADERS.copy()
     headers['authorization'] = CURRENT_TOKEN
 
+    # Get current issue number from database
+    pred_cursor = predictions_collection.find().sort("issue_number", -1).limit(1)
+    predictions = await pred_cursor.to_list(length=1)
+    issue_number = predictions[0].get("issue_number", "") if predictions else ""
+
     json_data = {
-        "gameType": AUTO_BET["game_type"],
+        "typeId": 30,
+        "issuenumber": issue_number,
         "amount": amount,
-        "direction": bet_direction,
-        "language": 7,
+        "betCount": 1,
+        "gameType": game_type,
+        "selectType": select_type,
+        "language": 0,
         "random": hashlib.md5(str(time.time()).encode()).hexdigest(),
-        "signature": hashlib.md5(f"{AUTO_BET['game_type']}{amount}{bet_direction}{time.time()}".encode()).hexdigest().upper(),
+        "signature": hashlib.md5(f"GameBetting{time.time()}".encode()).hexdigest().upper(),
         "timestamp": int(time.time())
+    }
+
+    debug_json(json_data, "Bet Request")
+
+    try:
+        async with session.post(
+            'https://api.bigwinqaz.com/api/webapi/GameBetting',
+            headers=headers,
+            json=json_data,
+            timeout=10.0
+        ) as response:
+            
+            debug_log(f"📡 Bet response status: {response.status}")
+            
+            if response.status == 200:
+                data = await response.json()
+                debug_json(data, "Bet Response")
+                
+                if data and data.get('code') == 0:
+                    debug_log("✅ Bet placed successfully!")
+                    return data
+                else:
+                    debug_log(f"❌ Bet API error: {data.get('msg', 'Unknown')}", "ERROR")
+                    return data
+            else:
+                debug_log(f"❌ Bet HTTP Error: {response.status}", "ERROR")
+                return None
+                
+    except Exception as e:
+        debug_log(f"❌ Bet error: {e}", "ERROR")
+        return None
+
+# ==========================================
+# 🎯 PLACE BET WITH BROWSER SIGNATURE
+# ==========================================
+BROWSER_BET = {
+    "random": "3147d6b93928443eb577d6a79307441c",
+    "signature": "5300ACD53D76A4CC2FE6135CF02167B1",
+    "timestamp": 1783261154,
+}
+
+async def place_bet_with_browser_signature(session: aiohttp.ClientSession, predicted_size: str, amount: int):
+    global CURRENT_TOKEN
+
+    if not CURRENT_TOKEN:
+        debug_log("❌ No token", "ERROR")
+        return None
+
+    bet_direction = "BIG" if "BIG" in predicted_size else "SMALL"
+    
+    game_type_map = {
+        "1min": 1,
+        "3min": 2,
+        "5min": 3,
+        "30s": 4,
+        "trx": 5
+    }
+    
+    game_type = game_type_map.get(AUTO_BET["game_type"], 1)
+    select_type = 13 if bet_direction == "BIG" else 14
+
+    headers = BROWSER_HEADERS.copy()
+    headers['authorization'] = CURRENT_TOKEN
+
+    pred_cursor = predictions_collection.find().sort("issue_number", -1).limit(1)
+    predictions = await pred_cursor.to_list(length=1)
+    issue_number = predictions[0].get("issue_number", "") if predictions else ""
+
+    json_data = {
+        "typeId": 30,
+        "issuenumber": issue_number,
+        "amount": amount,
+        "betCount": 1,
+        "gameType": game_type,
+        "selectType": select_type,
+        "language": 0,
+        "random": BROWSER_BET["random"],
+        "signature": BROWSER_BET["signature"],
+        "timestamp": BROWSER_BET["timestamp"],
     }
 
     try:
         async with session.post(
-            'https://api.bigwinqaz.com/api/webapi/bet/place',
+            'https://api.bigwinqaz.com/api/webapi/GameBetting',
             headers=headers,
             json=json_data,
             timeout=10.0
         ) as response:
             if response.status == 200:
-                return await response.json()
+                data = await response.json()
+                if data and data.get('code') == 0:
+                    debug_log("✅ Bet placed successfully with browser signature!")
+                    return data
+                else:
+                    debug_log(f"❌ Bet failed: {data.get('msg', 'Unknown')}", "ERROR")
+                    return data
             return None
-    except Exception:
+    except Exception as e:
+        debug_log(f"❌ Bet error: {e}", "ERROR")
         return None
 
 # ==========================================
@@ -449,56 +561,80 @@ async def auto_bet_handler(session: aiohttp.ClientSession):
     global AUTO_BET
 
     if not AUTO_BET["enabled"]:
+        debug_log("ℹ️ AutoBet is disabled")
         return
 
+    debug_log("🎯 AutoBet handler running...")
+
+    # Get latest prediction
     pred_cursor = predictions_collection.find().sort("issue_number", -1).limit(1)
     predictions = await pred_cursor.to_list(length=1)
 
     if not predictions:
+        debug_log("ℹ️ No predictions found")
         return
 
     latest_pred = predictions[0]
     issue_number = latest_pred.get("issue_number")
     predicted_size = latest_pred.get("predicted_size", "BIG")
 
+    debug_log(f"📊 Latest prediction: {issue_number} -> {predicted_size}")
+
     if AUTO_BET["last_bet_issue"] == issue_number:
+        debug_log(f"ℹ️ Already bet on issue {issue_number}")
         return
 
+    # Calculate Martingale amount
     amount = AUTO_BET["base_amount"] * (2 ** AUTO_BET["martingale_level"])
+    debug_log(f"💰 Bet amount: {amount} (Level: {AUTO_BET['martingale_level']})")
 
-    result = await place_bet(session, predicted_size, amount)
+    # Try browser signature first, fallback to dynamic
+    result = await place_bet_with_browser_signature(session, predicted_size, amount)
+    
+    if not result or result.get('code') != 0:
+        debug_log("🔄 Browser signature failed, trying dynamic signature...")
+        result = await place_bet(session, predicted_size, amount)
 
-    if result and result.get('code') == 0:
-        AUTO_BET["last_bet_issue"] = issue_number
-        AUTO_BET["bet_count"] += 1
+    if result:
+        debug_json(result, "Bet Result")
+        
+        if result.get('code') == 0:
+            AUTO_BET["last_bet_issue"] = issue_number
+            AUTO_BET["bet_count"] += 1
 
-        data = result.get('data', {})
-        is_win = data.get('win', False) or data.get('result') == 'win'
-        win_amount = data.get('winAmount', 0)
+            data = result.get('data', {})
+            is_win = data.get('win', False) or data.get('result') == 'win'
+            win_amount = data.get('winAmount', 0)
 
-        if is_win:
-            AUTO_BET["win_count"] += 1
-            AUTO_BET["total_profit"] += win_amount
-            AUTO_BET["current_streak"] = 0
-            AUTO_BET["martingale_level"] = 0
+            if is_win:
+                AUTO_BET["win_count"] += 1
+                AUTO_BET["total_profit"] += win_amount
+                AUTO_BET["current_streak"] = 0
+                AUTO_BET["martingale_level"] = 0
+                debug_log(f"✅ WIN! Amount: {win_amount}")
+            else:
+                AUTO_BET["loss_count"] += 1
+                AUTO_BET["total_profit"] -= amount
+                AUTO_BET["current_streak"] += 1
+                AUTO_BET["martingale_level"] += 1
+                debug_log(f"❌ LOSS! Amount: {amount}")
+
+            debug_log(f"📊 Stats: Bets={AUTO_BET['bet_count']}, Profit={AUTO_BET['total_profit']}")
+
+            # Auto stop conditions
+            if AUTO_BET["max_bets"] > 0 and AUTO_BET["bet_count"] >= AUTO_BET["max_bets"]:
+                AUTO_BET["enabled"] = False
+                AUTO_BET["status"] = "stopped"
+                debug_log(f"⏹ AutoBet stopped: Max bets reached")
+
+            if AUTO_BET["martingale_level"] >= 5:
+                AUTO_BET["enabled"] = False
+                AUTO_BET["status"] = "stopped"
+                debug_log("⏹ AutoBet stopped: 5 consecutive losses!")
         else:
-            AUTO_BET["loss_count"] += 1
-            AUTO_BET["total_profit"] -= amount
-            AUTO_BET["current_streak"] += 1
-            AUTO_BET["martingale_level"] += 1
-
-        if AUTO_BET["current_streak"] > AUTO_BET["max_streak"]:
-            AUTO_BET["max_streak"] = AUTO_BET["current_streak"]
-
-        debug_log(f"Bet: {issue_number} | {'WIN' if is_win else 'LOSS'} | Profit: {AUTO_BET['total_profit']}")
-
-        if AUTO_BET["max_bets"] > 0 and AUTO_BET["bet_count"] >= AUTO_BET["max_bets"]:
-            AUTO_BET["enabled"] = False
-            AUTO_BET["status"] = "stopped"
-
-        if AUTO_BET["martingale_level"] >= 5:
-            AUTO_BET["enabled"] = False
-            AUTO_BET["status"] = "stopped"
+            debug_log(f"❌ Bet failed: {result.get('msg', 'Unknown error')}", "ERROR")
+    else:
+        debug_log("❌ Bet request failed", "ERROR")
 
 # ==========================================
 # 🚀 CORE LOGIC
@@ -748,6 +884,7 @@ async def cmd_start(message: types.Message):
         "/betstat - Show Statistics\n"
         "/betsettings - Change Settings\n"
         "/status - Check System Status\n"
+        "/testbet - Test Bet (1 unit)\n"
         "/debug - Toggle Debug Mode"
     )
 
@@ -777,6 +914,30 @@ async def cmd_balance(message: types.Message):
         else:
             error = result.get("error", "Unknown error")
             await loading_msg.edit_text(f"❌ <b>Balance check failed</b>\n\n{error}")
+
+@dp.message(Command("testbet"))
+async def cmd_testbet(message: types.Message):
+    """Test Bet ထိုးကြည့်တဲ့ Command"""
+    debug_log(f"📨 /testbet from {message.from_user.id}")
+    
+    loading_msg = await message.reply("🔄 Testing bet with amount 1...")
+    
+    async with aiohttp.ClientSession() as session:
+        result = await place_bet(session, "BIG", 1)
+        
+        if result:
+            if result.get('code') == 0:
+                await loading_msg.edit_text(
+                    f"✅ <b>Test Bet Successful!</b>\n\n"
+                    f"📊 Result: {json.dumps(result, indent=2, ensure_ascii=False)}"
+                )
+            else:
+                await loading_msg.edit_text(
+                    f"❌ <b>Test Bet Failed</b>\n\n"
+                    f"Error: {result.get('msg', 'Unknown error')}"
+                )
+        else:
+            await loading_msg.edit_text("❌ <b>Test Bet Failed</b>\n\nNo response from API")
 
 @dp.message(Command("debug"))
 async def cmd_debug(message: types.Message):
