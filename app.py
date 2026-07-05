@@ -28,23 +28,43 @@ current_pattern_index = 0
 is_bot_running = False
 
 # ==========================================
-# 🔐 2. TOKEN LOGIN LOGIC
+# 🔐 2. UI AUTO LOGIN LOGIC
 # ==========================================
-async def login_via_token(page, token):
-    print("🔄 ဝဘ်ဆိုဒ်သို့ ချိတ်ဆက်နေပါသည်...")
-    await page.goto(GAME_URL)
+async def login_via_ui(page, username, password):
+    print("🔄 ဝဘ်ဆိုဒ်သို့ ချိတ်ဆက်၍ Login ဝင်နေပါသည်...")
+    
+    # ၁။ Login Page သို့ သွားရန်
+    await page.goto("https://www.777bigwingame.app/#/login")
     await page.wait_for_timeout(3000)
-    
-    await page.evaluate(f"""
-        localStorage.setItem('token', '{token}');
-        let vuexData = JSON.parse(localStorage.getItem('vuex') || '{{}}');
-        vuexData.token = '{token}';
-        localStorage.setItem('vuex', JSON.stringify(vuexData));
-    """)
-    
-    await page.reload()
-    await page.wait_for_timeout(5000)
-    print("✅ Token ဖြင့် Login ဝင်ခြင်း အောင်မြင်ပါပြီ။")
+
+    try:
+        # ၂။ ဖုန်းနံပါတ် (Username) ရိုက်ထည့်ရန် (Screenshot မှ name="userNumber" ကို အသုံးပြုထားသည်)
+        username_input = page.locator('input[name="userNumber"]')
+        await username_input.fill(username)
+        await page.wait_for_timeout(500)
+
+        # ၃။ Password ရိုက်ထည့်ရန် (Screenshot မှ placeholder="စကားဝှက်" ကို အသုံးပြုထားသည်)
+        password_input = page.locator('input[placeholder="စကားဝှက်"]')
+        await password_input.fill(password)
+        await page.wait_for_timeout(500)
+
+        # ၄။ Login ခလုတ်ကို နှိပ်ရန် (div class="signIn__container-button" ကို အသုံးပြုထားသည်)
+        await page.click('div.signIn__container-button')
+        
+        # Login ဝင်ပြီးနောက် Home Page သို့ ရောက်ရန် စောင့်ဆိုင်းခြင်း
+        await page.wait_for_timeout(5000)
+        
+        # ၅။ Game ရှိရာ စာမျက်နှာသို့ ဆက်သွားရန်
+        await page.goto(GAME_URL)
+        await page.wait_for_timeout(3000)
+        
+        print("✅ UI မှတစ်ဆင့် Login ဝင်ခြင်း အောင်မြင်ပါပြီ။")
+        return True
+
+    except Exception as e:
+        print(f"❌ Login ဝင်ရာတွင် အမှားအယွင်းရှိပါသည်: {e}")
+        return False
+
 
 # ==========================================
 # 🤖 3. PLAYWRIGHT AUTO BET LOGIC
