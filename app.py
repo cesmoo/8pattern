@@ -35,58 +35,64 @@ class AutoBetState(StatesGroup):
     waiting_for_credentials = State()
 
 # ==========================================
-# 🔐 2. UI AUTO LOGIN LOGIC (FIXED SELECTORS)
+# 🔐 2. UI AUTO LOGIN LOGIC (FIXED WITH EXACT SELECTORS)
 # ==========================================
 async def login_via_ui(page, username, password):
     print("🔄 ဝဘ်ဆိုဒ်သို့ ချိတ်ဆက်၍ Login ဝင်နေပါသည်...")
     
     try:
+        # 1. Login page သို့ သွားမည်
         await page.goto("https://www.777bigwingame.app/#/login", wait_until="networkidle")
         await page.wait_for_timeout(3000)
 
-        # 🔧 Native Event Setter (ပြင်ဆင်ပြီး)
-        native_js = f"""
-            function setNativeValue(element, value) {{
-                const valueSetter = Object.getOwnPropertyDescriptor(element, 'value').set;
-                const prototype = Object.getPrototypeOf(element);
-                const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value').set;
-                
-                if (valueSetter && valueSetter !== prototypeValueSetter) {{
-                    prototypeValueSetter.call(element, value);
-                }} else {{
-                    valueSetter.call(element, value);
-                }}
-                element.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                element.dispatchEvent(new Event('change', {{ bubbles: true }}));
-            }}
+        # ✅ 2. ဖုန်းနံပါတ် ထည့်မည် (HTML ထဲက name="userNumber" ကို တိုက်ရိုက်သုံးမည်)
+        # Native Event အစား Playwright ရဲ့ type() ကို သုံးပြီး လူရိုက်သလို နှေးနှေးရိုက်မည်
+        phone_input = page.locator('input[name="userNumber"]')
+        if await phone_input.is_visible():
+            await phone_input.click()
+            await page.wait_for_timeout(500)
+            await phone_input.type(username, delay=150) # delay 150ms ဖြင့် တစ်လုံးချင်း ရိုက်မည်
+            print(f"✅ ဖုန်းနံပါတ် ({username}) ထည့်ပြီးပါပြီ။")
 
-            // ✅ FIX: ဖုန်းနံပါတ်ထည့်သည့် input ကို ရှာရန် (phoneInput class ကို သုံးထား)
-            let phone = document.querySelector('div.phoneInput__container input');
-            if (phone) setNativeValue(phone, '{username}');
+        # ✅ 3. စကားဝှက် ထည့်မည် (Vue password class ကို သုံးမည်)
+        pwd_input = page.locator('div.passwordInput__container-input input')
+        if await pwd_input.is_visible():
+            await pwd_input.click()
+            await page.wait_for_timeout(500)
+            await pwd_input.type(password, delay=150) # delay 150ms ဖြင့် တစ်လုံးချင်း ရိုက်မည်
+            print(f"✅ စကားဝှက် ထည့်ပြီးပါပြီ။")
 
-            let pwd = document.querySelector('.passwordInput__container-input input');
-            if (pwd) setNativeValue(pwd, '{password}');
-        """
-        
-        print("🔄 အချက်အလက်များ ထည့်သွင်းနေပါသည်...")
-        await page.evaluate(native_js)
         await page.wait_for_timeout(1000)
 
+        # ✅ 4. Login ခလုတ်ကို နှိပ်မည် (HTML ထဲက class အတိုင်း)
         print("🔄 Login ခလုတ်ကို နှိပ်နေပါသည်...")
-        # ✅ FIX: Login ခလုတ်ကို class အမျိုးမျိုးဖြင့် ရှာဖွေနိုင်ရန်
-        await page.evaluate("""
-            let btn = document.querySelector('div.signIn__container-button, button.submit-btn, div.login-btn');
-            if (btn) btn.click();
-        """)
+        login_btn = page.locator('div.signIn__container-button')
+        if await login_btn.is_visible():
+            await login_btn.click()
+            print("✅ Login ခလုတ် နှိပ်ပြီးပါပြီ။")
+        else:
+            # Backup: အကယ်၍ class နဲ့မရှာရင် button text နဲ့ ပြန်ရှာမယ်
+            await page.evaluate("""
+                let btns = document.querySelectorAll('button, div[role="button"]');
+                for(let btn of btns) {
+                    if(btn.innerText.trim() === 'မင်္ဂလာပါ') {
+                        btn.click();
+                        break;
+                    }
+                }
+            """)
         
-        await page.wait_for_timeout(5000)
+        # ✅ 5. Login လုပ်ပြီး စာမျက်နှာ ပြောင်းဖို့ စောင့်မည် (၆ စက္ကန့်)
+        await page.wait_for_timeout(6000) 
         
         # URL ပြောင်းမပြောင်း စစ်ဆေးခြင်း
         current_url = page.url
         if "login" in current_url.lower():
             await page.screenshot(path="login_error.png")
+            print("❌ Login Failed (URL မပြောင်းသေး)")
             return False
             
+        # ✅ 6. ဂိမ်းစာမျက်နှာသို့ သွားမည်
         await page.goto(GAME_URL)
         await page.wait_for_timeout(4000) 
         
