@@ -1,19 +1,26 @@
-# Playwright ကို အထောက်အပံ့ပေးသည့် Official Python Image ကို အသုံးပြုပါမည် (Ubuntu Jammy အခြေခံ)
-FROM mcr.microsoft.com/playwright/python:v1.44.0-jammy
+# Python 3.11 image ကိုသုံးတယ် (ပိုမြန်ပြီး stable)
+FROM python:3.11-slim
 
-# လုပ်ငန်းဆောင်ရွက်မည့် Directory ကို သတ်မှတ်ခြင်း
+# Working directory သတ်မှတ်တယ်
 WORKDIR /app
 
-# Requirements ဖိုင်ကို အရင် copy ကူးပြီး install လုပ်ခြင်း
+# System dependencies တွေထည့်တယ် (matplotlib, numpy အတွက်)
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libfreetype6-dev \
+    libpng-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# requirements.txt ကို အရင်ကူးတယ် (caching ကောင်းအောင်)
 COPY requirements.txt .
+
+# Python packages တွေ install လုပ်တယ်
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 🔧 ဖြေရှင်းထားသောအပိုင်း (python -m ဖြင့် ခေါ်ယူခြင်း)
-RUN python -m playwright install chromium
-RUN python -m playwright install-deps chromium
-
-# Code ဖိုင်အားလုံးကို Docker Container ထဲသို့ Copy ကူးခြင်း
+# Source code အားလုံးကို ကူးတယ်
 COPY . .
 
-# Bot ကို စတင် Run ရန် Command
-CMD ["python", "app.py"]
+# Bot ကို run တယ်
+CMD ["python", "bot.py"]
