@@ -4,12 +4,13 @@ FROM mcr.microsoft.com/playwright/python:v1.44.0-jammy
 # လုပ်ငန်းဆောင်ရွက်မည့် Directory ကို သတ်မှတ်ခြင်း
 WORKDIR /app
 
-# Requirements ဖိုင်ကို အရင် copy ကူးပြီး install လုပ်ခြင်း (Cache ကို ပိုမိုကောင်းမွန်စွာ အသုံးချရန်)
+# Requirements ဖိုင်ကို အရင် copy ကူးပြီး install လုပ်ခြင်း
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Playwright အတွက် Chromium browser ကို install လုပ်ခြင်း
-RUN playwright install chromium
+# 🔧 ဖြေရှင်းထားသောအပိုင်း (python -m ဖြင့် ခေါ်ယူခြင်း)
+RUN python -m playwright install chromium
+RUN python -m playwright install-deps chromium
 
 # Code ဖိုင်အားလုံးကို Docker Container ထဲသို့ Copy ကူးခြင်း
 COPY . .
