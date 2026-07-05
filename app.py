@@ -35,7 +35,7 @@ class AutoBetState(StatesGroup):
     waiting_for_credentials = State()
 
 # ==========================================
-# 🔐 2. UI AUTO LOGIN LOGIC (MOBILE TOUCH FIX)
+# 🔐 2. UI AUTO LOGIN LOGIC (HUMAN TYPING FIX)
 # ==========================================
 async def login_via_ui(page, username, password):
     print("🔄 ဝဘ်ဆိုဒ်သို့ ချိတ်ဆက်၍ Login ဝင်နေပါသည်...")
@@ -44,26 +44,25 @@ async def login_via_ui(page, username, password):
         await page.goto("https://www.777bigwingame.app/#/login", wait_until="networkidle")
         await page.wait_for_timeout(3000)
 
-        # ၂။ ဖုန်းနံပါတ် ရိုက်ထည့်ရန်
+        # ၂။ ဖုန်းနံပါတ် ရိုက်ထည့်ရန် (လူရိုက်သကဲ့သို့ တစ်လုံးချင်းစီ ရိုက်မည်)
         await page.wait_for_selector('input[name="userNumber"]', timeout=10000)
-        username_input = page.locator('input[name="userNumber"]')
-        await username_input.click() # အကွက်ကို အရင် Touch လုပ်မည်
-        await username_input.fill(username)
+        username_input = page.locator('input[name="userNumber"]').first
+        await username_input.click()
+        await username_input.clear() # အကွက်ထဲမှာ စာရှိနေရင် အရင်ဖျက်ပါမည်
+        await username_input.press_sequentially(username, delay=150) 
         await page.wait_for_timeout(1000)
 
-        # ၃။ Password ရိုက်ထည့်ရန်
-        password_input = page.locator('div.passwordInput__container-input input')
-        await password_input.click() # အကွက်ကို အရင် Touch လုပ်မည်
-        await password_input.fill(password)
-        await page.wait_for_timeout(500)
-
-        # Keyboard မှ 'Enter' ခေါက်သည့်ပုံစံကို အသုံးပြုခြင်း
-        await password_input.press("Enter")
+        # ၃။ Password ရိုက်ထည့်ရန် (လူရိုက်သကဲ့သို့ တစ်လုံးချင်းစီ ရိုက်မည်)
+        password_input = page.locator('.passwordInput__container-input input').first
+        await password_input.click()
+        await password_input.clear() 
+        # fill() အစား press_sequentially() ကို သုံး၍ လူအစစ်ကဲ့သို့ ပုံဖျက်သည်
+        await password_input.press_sequentially(password, delay=150)
         await page.wait_for_timeout(1000)
 
-        # ၄။ Login ခလုတ်ကို နှိပ်ရန် (Force click နှင့် Delay ထည့်ထားသည်)
-        login_btn = page.locator('div.signIn__container-button').first
-        await login_btn.click(force=True, delay=200) 
+        # ၄။ Login ခလုတ်ကို နှိပ်ရန်
+        login_btn = page.locator('.signIn__container-button').first
+        await login_btn.click(force=True) 
         
         # ၅။ Login ဝင်ပြီးနောက် ၅ စက္ကန့် စောင့်ဆိုင်းခြင်း
         await page.wait_for_timeout(5000)
@@ -84,6 +83,7 @@ async def login_via_ui(page, username, password):
         print(f"❌ Login ဝင်ရာတွင် အမှားအယွင်းရှိပါသည်: {e}")
         await page.screenshot(path="login_error.png")
         return False
+
 
 # ==========================================
 # 🤖 3. PLAYWRIGHT AUTO BET LOGIC
