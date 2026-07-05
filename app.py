@@ -5,27 +5,33 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from playwright.async_api import async_playwright
 
+# .env ဖိုင်ကို ဖတ်ရန်
 load_dotenv()
 
 # ==========================================
 # ⚙️ 1. CONFIGURATION
 # ==========================================
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-OWNER_ID = int(os.getenv("OWNER_ID", "1318826936"))
-WEB_TOKEN = os.getenv("WEB_TOKEN") 
+OWNER_ID = int(os.getenv("OWNER_ID", "0"))
 GAME_URL = "https://www.777bigwingame.app/"
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# 🔄 System Variables
+# --- 🔄 System Variables ---
 MULTIPLIERS = [1, 2, 4, 8, 16, 32, 64] # Default လောင်းကြေးအဆင့်များ
 CUSTOM_PATTERN = ["BIG"] # Default Pattern (အမြဲတမ်း အကြီး)
 current_step = 0
 current_pattern_index = 0
 is_bot_running = False
+
+# --- 🆕 Credentials တောင်းရန် State သတ်မှတ်ခြင်း ---
+class AutoBetState(StatesGroup):
+    waiting_for_credentials = State()
 
 # ==========================================
 # 🔐 2. UI AUTO LOGIN LOGIC
@@ -38,17 +44,17 @@ async def login_via_ui(page, username, password):
     await page.wait_for_timeout(3000)
 
     try:
-        # ၂။ ဖုန်းနံပါတ် (Username) ရိုက်ထည့်ရန် (Screenshot မှ name="userNumber" ကို အသုံးပြုထားသည်)
+        # ၂။ ဖုန်းနံပါတ် (Username) ရိုက်ထည့်ရန်
         username_input = page.locator('input[name="userNumber"]')
         await username_input.fill(username)
         await page.wait_for_timeout(500)
 
-        # ၃။ Password ရိုက်ထည့်ရန် (Screenshot မှ placeholder="စကားဝှက်" ကို အသုံးပြုထားသည်)
+        # ၃။ Password ရိုက်ထည့်ရန်
         password_input = page.locator('input[placeholder="စကားဝှက်"]')
         await password_input.fill(password)
         await page.wait_for_timeout(500)
 
-        # ၄။ Login ခလုတ်ကို နှိပ်ရန် (div class="signIn__container-button" ကို အသုံးပြုထားသည်)
+        # ၄။ Login ခလုတ်ကို နှိပ်ရန်
         await page.click('div.signIn__container-button')
         
         # Login ဝင်ပြီးနောက် Home Page သို့ ရောက်ရန် စောင့်ဆိုင်းခြင်း
@@ -64,7 +70,6 @@ async def login_via_ui(page, username, password):
     except Exception as e:
         print(f"❌ Login ဝင်ရာတွင် အမှားအယွင်းရှိပါသည်: {e}")
         return False
-
 
 # ==========================================
 # 🤖 3. PLAYWRIGHT AUTO BET LOGIC
@@ -103,7 +108,7 @@ async def check_win_status(page):
     try:
         win_popup = page.locator("div.WinningTip__C-body-l1:has-text('ဂုဏ်ယူပါတယ်')")
         if await win_popup.is_visible(timeout=5000):
-            await page.mouse.click(10, 10) 
+            await page.mouse.click(10, 10) # မျက်နှာပြင်လွတ်ကိုနှိပ်၍ Popup ပိတ်ရန်
             return True
         return False
     except:
@@ -119,7 +124,6 @@ async def set_pattern(message: types.Message):
     if message.from_user.id != OWNER_ID: return
 
     try:
-        # စာသားများကို သန့်စင်ပြီး 'B,S,B,B' ပုံစံဖော်ခြင်း
         raw_pattern = message.text.replace(".setp", "").replace(" ", "").upper()
         if not raw_pattern:
             return await message.reply("⚠️ ပုံစံမှားယွင်းနေပါသည်။\nဥပမာ - <code>.setp B,S,B,B,B,B,S,S</code>")
@@ -133,7 +137,7 @@ async def set_pattern(message: types.Message):
                 return await message.reply(f"❌ Error: 'B' သို့မဟုတ် 'S' ကိုသာ အသုံးပြုပါ။ (တွေ့ရှိသောစာသား: {p})")
         
         CUSTOM_PATTERN = new_pattern
-        current_pattern_index = 0 # Pattern အသစ်ပြောင်းလျှင် အစမှပြန်စမည်
+        current_pattern_index = 0
         
         pattern_str = " ➡️ ".join(["အကြီး" if x=="BIG" else "အသေး" for x in CUSTOM_PATTERN])
         await message.reply(f"✅ <b>Pattern ပြင်ဆင်ပြီးပါပြီ။</b>\n🔄 အစီအစဉ်: [ {pattern_str} ]")
@@ -149,11 +153,11 @@ async def set_multipliers(message: types.Message):
     try:
         parts = message.text.replace(".set", "").strip().split()
         if not parts:
-            return await message.reply("⚠️ ပုံစံမှားယွင်းနေပါသည်။\nဥပမာ - <code>.set 1 2 4 8 16</code>")
+            return await message.reply("⚠️ ပုံစံမှားယွင်းနေပါသည်။\nဥပမာ - <code>.set 1 2 4 8 16 32 64</code>")
         
         new_multipliers = [int(x) for x in parts]
         MULTIPLIERS = new_multipliers
-        current_step = 0 # လောင်းကြေးအသစ်ပြောင်းလျှင် အဆင့် ၁ မှ ပြန်စမည်
+        current_step = 0
         
         steps_str = "ဆ, ".join(map(str, MULTIPLIERS)) + "ဆ"
         await message.reply(
@@ -165,33 +169,56 @@ async def set_multipliers(message: types.Message):
         await message.reply("❌ Error: ကိန်းဂဏန်းများသာ ကွက်လပ်ခြား၍ ရိုက်ထည့်ပါ။")
 
 # ==========================================
-# 🎮 5. TELEGRAM BOT CORE HANDLERS
+# 🎮 5. TELEGRAM BOT CORE HANDLERS (FSM & Background Task)
 # ==========================================
 @dp.message(Command("autobet"))
-async def start_autobet(message: types.Message):
-    global is_bot_running, current_step, current_pattern_index
+async def ask_credentials(message: types.Message, state: FSMContext):
+    global is_bot_running
     
     if message.from_user.id != OWNER_ID:
         return await message.reply("🚫 <b>Access Denied!</b>")
     
     if is_bot_running:
-        return await message.reply("⚠️ Auto Bet အလုပ်လုပ်နေဆဲ ဖြစ်ပါသည်။")
+        return await message.reply("⚠️ Auto Bet အလုပ်လုပ်နေဆဲ ဖြစ်ပါသည်။ ရပ်ချင်ပါက /stopbet ကို နှိပ်ပါ။")
     
-    # --- 🔧 ပြင်ဆင်လိုက်သော အပိုင်း (WEB_TOKEN အစား USERNAME, PASSWORD ကို စစ်ဆေးခြင်း) ---
-    USERNAME = os.getenv("USERNAME")
-    PASSWORD = os.getenv("PASSWORD")
+    await message.reply(
+        "🔑 ကျေးဇူးပြု၍ Login ဝင်မည့် <b>ဖုန်းနံပါတ်</b> နှင့် <b>Password</b> ကို ကွက်လပ်ခြား၍ ရိုက်ထည့်ပါ။\n\n"
+        "ဥပမာ - <code>959680090540 Mitheint11</code>"
+    )
+    await state.set_state(AutoBetState.waiting_for_credentials)
 
-    if not USERNAME or not PASSWORD:
-        return await message.reply("❌ Error: .env တွင် USERNAME သို့မဟုတ် PASSWORD မထည့်ထားပါ။")
-    # --------------------------------------------------------------------------
+@dp.message(AutoBetState.waiting_for_credentials)
+async def start_autobet_with_creds(message: types.Message, state: FSMContext):
+    global is_bot_running, current_step, current_pattern_index
+
+    parts = message.text.strip().split()
+    if len(parts) != 2:
+        return await message.reply("❌ ပုံစံမှားယွင်းနေပါသည်။ ဖုန်းနံပါတ် နှင့် Password ကိုသာ ကွက်လပ်ခြား၍ ရိုက်ထည့်ပါ။\nဥပမာ - <code>959680090540 Mitheint11</code>")
+
+    USERNAME = parts[0]
+    PASSWORD = parts[1]
+    
+    await state.clear() 
 
     is_bot_running = True
     current_step = 0
     current_pattern_index = 0
     
     steps_str = ", ".join(map(str, MULTIPLIERS))
-    await message.reply(f"🚀 <b>Auto Bet စတင်နေပါပြီ...</b>\n(Multipliers: {steps_str})\n(Base Amount: 10 ကျပ်)")
+    await message.reply(
+        f"🚀 <b>Auto Bet စတင်နေပါပြီ...</b>\n"
+        f"👤 အကောင့်: <b>{USERNAME}</b>\n"
+        f"📈 Multipliers: {steps_str}\n"
+        f"💰 Base Amount: 10 ကျပ်"
+    )
 
+    # Playwright ကို နောက်ကွယ်မှ Run ခိုင်းခြင်း (Background Task)
+    asyncio.create_task(run_playwright_task(USERNAME, PASSWORD))
+
+# --- 🚀 Playwright Background Task ---
+async def run_playwright_task(username, password):
+    global is_bot_running, current_step, current_pattern_index
+    
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(
@@ -200,17 +227,15 @@ async def start_autobet(message: types.Message):
         page = await context.new_page()
         
         try:
-            # --- 🔧 Token အစား UI ကို အသုံးပြု၍ Login ဝင်ခြင်း ---
-            login_success = await login_via_ui(page, USERNAME, PASSWORD)
+            # ဝင်လာတဲ့ ဖုန်းနံပါတ်၊ Password ဖြင့် Login ဝင်ခြင်း
+            login_success = await login_via_ui(page, username, password)
             
             if not login_success:
-                await bot.send_message(OWNER_ID, "❌ Login ဝင်၍ မရပါ။")
+                await bot.send_message(OWNER_ID, "❌ Login ဝင်၍ မရပါ။ ကျေးဇူးပြု၍ ဖုန်းနံပါတ်နှင့် Password မှန်ကန်မှုရှိမရှိ စစ်ဆေးပါ။")
                 is_bot_running = False
                 return 
-            # -----------------------------------------------
             
             while is_bot_running:
-                # Pattern ထဲမှ လက်ရှိလောင်းရမည့် အကြီး/အသေး ကို ရွေးချယ်ခြင်း
                 current_bet_type = CUSTOM_PATTERN[current_pattern_index % len(CUSTOM_PATTERN)]
                 display_type = "အကြီး (BIG) 🔴" if current_bet_type == "BIG" else "အသေး (SMALL) 🟢"
                 current_multiplier = MULTIPLIERS[current_step]
@@ -248,7 +273,6 @@ async def start_autobet(message: types.Message):
             await browser.close()
             is_bot_running = False
             await bot.send_message(OWNER_ID, "🔌 Browser ပိတ်လိုက်ပါပြီ။")
-
 
 @dp.message(Command("stopbet"))
 async def stop_autobet(message: types.Message):
