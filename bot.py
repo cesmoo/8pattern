@@ -182,16 +182,21 @@ async def login_and_get_token(session: aiohttp.ClientSession):
     signature = hashlib.md5(f"{username}{password}{timestamp}".encode()).hexdigest().upper()
     
     json_data = {
-        'username': username,
-        'pwd': password,
+        'username': '959680090540',
+        'pwd': 'Mitheint11',
         'phonetype': 1,
         'logintype': 'mobile',
         'packId': '',
-        'deviceId': hashlib.md5(str(random.random()).encode()).hexdigest(),
-        'language': 7,
-        'random': random_str,
-        'signature': signature,
-        'timestamp': timestamp,
+        'deviceId': '51ed4ee0f338a1bb24063ffdfcd31ce6',
+        'pixelId': '',
+        'fbcId': '',
+        'fbc': '',
+        'fbp': '',
+        'adId': '',
+        'language': 0,
+        'random': 'b8b9169823254921acceced7d17e5a17',
+        'signature': '17D6A5871D3981B1F4DCF9DD522E2B1D',
+        'timestamp': 1783258460,
     }
     
     debug_json(json_data, "Login Request")
