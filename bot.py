@@ -195,6 +195,53 @@ async def ensure_token(session):
     return True
 
 # ==========================================
+# 💰 GET BALANCE
+# ==========================================
+async def get_balance(session: aiohttp.ClientSession):
+    """အကောင့်ထဲက ကျန်ငွေကို စစ်တယ်"""
+    global CURRENT_TOKEN
+
+    if not CURRENT_TOKEN:
+        if not await ensure_token(session):
+            return {"success": False, "error": "No token available"}
+
+    headers = BROWSER_HEADERS.copy()
+    headers['authorization'] = CURRENT_TOKEN
+
+    json_data = {
+        'language': 0,
+        'random': hashlib.md5(str(time.time()).encode()).hexdigest(),
+        'signature': hashlib.md5(f"GetBalance{time.time()}".encode()).hexdigest().upper(),
+        'timestamp': int(time.time()),
+    }
+
+    try:
+        async with session.post(
+            'https://api.bigwinqaz.com/api/webapi/GetBalance',
+            headers=headers,
+            json=json_data,
+            timeout=10.0
+        ) as response:
+            
+            if response.status == 200:
+                data = await response.json()
+                if data and data.get('code') == 0:
+                    balance_data = data.get('data', {})
+                    return {
+                        "success": True,
+                        "balance": balance_data.get('balance', 0),
+                        "currency": balance_data.get('currency', ''),
+                        "raw": balance_data
+                    }
+                else:
+                    return {"success": False, "error": data.get('msg', 'Unknown error')}
+            else:
+                return {"success": False, "error": f"HTTP {response.status}"}
+                
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+# ==========================================
 # 🧠 AI PREDICTION
 # ==========================================
 def dynamic_history_predict(history_docs):
@@ -695,6 +742,7 @@ async def cmd_start(message: types.Message):
     await message.reply(
         "👋 <b>Welcome to AI Prediction Bot!</b>\n\n"
         "📌 <b>Commands:</b>\n"
+        "/bal - Check Balance\n"
         "/autobet - Start Auto Bet\n"
         "/stopbet - Stop Auto Bet\n"
         "/betstat - Show Statistics\n"
@@ -702,6 +750,33 @@ async def cmd_start(message: types.Message):
         "/status - Check System Status\n"
         "/debug - Toggle Debug Mode"
     )
+
+@dp.message(Command("bal"))
+async def cmd_balance(message: types.Message):
+    """Balance စစ်တဲ့ Command"""
+    debug_log(f"📨 /bal from {message.from_user.id}")
+    
+    loading_msg = await message.reply("🔄 Checking balance...")
+    
+    async with aiohttp.ClientSession() as session:
+        result = await get_balance(session)
+        
+        if result and result.get("success"):
+            balance = result.get("balance", 0)
+            currency = result.get("currency", "")
+            
+            msg = (
+                f"💰 <b>Balance Information</b>\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"💵 <b>Balance:</b> {balance:.2f} {currency}\n"
+                f"🔐 <b>Token:</b> {'✅ Valid' if CURRENT_TOKEN else '❌ Missing'}\n"
+                f"🎮 <b>Game:</b> {AUTO_BET['game_type']}\n"
+                f"📊 <b>AutoBet:</b> {'🟢 Running' if AUTO_BET['enabled'] else '🔴 Stopped'}\n"
+            )
+            await loading_msg.edit_text(msg)
+        else:
+            error = result.get("error", "Unknown error")
+            await loading_msg.edit_text(f"❌ <b>Balance check failed</b>\n\n{error}")
 
 @dp.message(Command("debug"))
 async def cmd_debug(message: types.Message):
@@ -762,6 +837,7 @@ async def cmd_betstat(message: types.Message):
 async def cmd_betsettings(message: types.Message):
     global AUTO_BET
     args = message.text.split()
+    
     if len(args) < 3:
         await message.reply(
             "⚙️ <b>Usage:</b>\n"
@@ -770,27 +846,39 @@ async def cmd_betsettings(message: types.Message):
             "/betsettings max 10\n\n"
             f"📌 Current: Game={AUTO_BET['game_type']}, Amount={AUTO_BET['base_amount']}"
         )
-        return    setting = args[1].lower()
+        return
+    
+    setting = args[1].lower()
     value = args[2]
 
     if setting == "game":
         if value in ["1min", "3min", "5min", "30s", "trx"]:
             AUTO_BET["game_type"] = value
             await message.reply(f"✅ Game changed to: {value}")
+        else:
+            await message.reply("❌ Invalid game. Use: 1min, 3min, 5min, 30s, trx")
+            
     elif setting == "amount":
         try:
             amount = int(value)
             if amount >= 1:
                 AUTO_BET["base_amount"] = amount
                 await message.reply(f"✅ Amount changed to: {amount}")
+            else:
+                await message.reply("❌ Amount must be >= 1")
         except ValueError:
             await message.reply("❌ Invalid amount")
+            
     elif setting == "max":
         try:
-            AUTO_BET["max_bets"] = int(value)
-            await message.reply(f"✅ Max bets: {AUTO_BET['max_bets'] or 'Unlimited'}")
+            max_bets = int(value)
+            AUTO_BET["max_bets"] = max_bets
+            await message.reply(f"✅ Max bets: {max_bets if max_bets > 0 else 'Unlimited'}")
         except ValueError:
             await message.reply("❌ Invalid number")
+            
+    else:
+        await message.reply(f"❌ Unknown setting: {setting}")
 
 @dp.message(Command("status"))
 async def cmd_status(message: types.Message):
