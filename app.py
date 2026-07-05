@@ -14,28 +14,7 @@ from playwright.async_api import async_playwright
 load_dotenv()
 
 # ==========================================
-# ⚙️ 1. CONFIGURATION
-# ==========================================
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-OWNER_ID = int(os.getenv("OWNER_ID", "0"))
-GAME_URL = "https://www.777bigwingame.app/"
-
-bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-dp = Dispatcher()
-
-# --- 🔄 System Variables ---
-MULTIPLIERS = [1, 2, 4, 8, 16, 32, 64] # Default လောင်းကြေးအဆင့်များ
-CUSTOM_PATTERN = ["BIG"] # Default Pattern (အမြဲတမ်း အကြီး)
-current_step = 0
-current_pattern_index = 0
-is_bot_running = False
-
-# --- 🆕 Credentials တောင်းရန် State သတ်မှတ်ခြင်း ---
-class AutoBetState(StatesGroup):
-    waiting_for_credentials = State()
-
-# ==========================================
-# 🔐 2. UI AUTO LOGIN LOGIC (TAP + JS CLICK FIX)
+# 🔐 2. UI AUTO LOGIN LOGIC (VUE.JS REACTIVITY FIX)
 # ==========================================
 async def login_via_ui(page, username, password):
     print("🔄 ဝဘ်ဆိုဒ်သို့ ချိတ်ဆက်၍ Login ဝင်နေပါသည်...")
@@ -44,32 +23,50 @@ async def login_via_ui(page, username, password):
         await page.goto("https://www.777bigwingame.app/#/login", wait_until="networkidle")
         await page.wait_for_timeout(3000)
 
-        # ၂။ ဖုန်းနံပါတ် ရိုက်ထည့်ရန်
-        await page.wait_for_selector('input[name="userNumber"]', timeout=10000)
-        username_input = page.locator('input[name="userNumber"]').first
-        await username_input.click()
-        await username_input.clear()
-        await username_input.press_sequentially(username, delay=100) 
-        await page.wait_for_timeout(500)
+        print("🔄 အချက်အလက်များ ထည့်သွင်းနေပါသည်...")
+        
+        # 🔧 Fix: Playwright ၏ ရိုးရိုးရိုက်ထည့်ခြင်းအစား Browser ထဲသို့ JavaScript တိုက်ရိုက်ထည့်သွင်းခြင်း
+        # ဤနည်းလမ်းသည် Vue.js အား စာသားဝင်သွားကြောင်း အတင်းအကျပ် သိစေပါသည်။
+        await page.evaluate(f"""
+            // (၁) ဖုန်းနံပါတ် ထည့်သွင်းခြင်း
+            let phone = document.querySelector('input[name="userNumber"]');
+            if (phone) {{
+                phone.value = '{username}';
+                phone.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                phone.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                phone.dispatchEvent(new Event('blur', {{ bubbles: true }}));
+            }}
+            
+            // (၂) Password ထည့်သွင်းခြင်း
+            let pwdContainer = document.querySelector('.passwordInput__container');
+            if (pwdContainer) {{
+                let pwd = pwdContainer.querySelector('input');
+                if (pwd) {{
+                    pwd.value = '{password}';
+                    pwd.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    pwd.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    pwd.dispatchEvent(new Event('blur', {{ bubbles: true }}));
+                }}
+            }}
+        """)
+        
+        await page.wait_for_timeout(1500) # ဝဘ်ဆိုဒ်မှ Button ဖွင့်ပေးရန် ခဏစောင့်မည်
 
-        # ၃။ Password ရိုက်ထည့်ရန်
-        password_input = page.locator('.passwordInput__container-input input').first
-        await password_input.click()
-        await password_input.clear() 
-        await password_input.press_sequentially(password, delay=100)
-        await page.wait_for_timeout(500)
-
-        # ၄။ Login ခလုတ်ကို နှိပ်ရန် (🔧 ဤနေရာကို အထူးပြုပြင်ထားသည်)
         print("🔄 Login ခလုတ်ကို နှိပ်နေပါသည်...")
-        login_btn = page.locator('.signIn__container-button').first
         
-        # နည်းလမ်း (၁) - ဖုန်း Screen ကို Touch လုပ်သည့်ပုံစံဖြင့် အရင်နှိပ်မည်
-        await login_btn.tap(force=True)
-        await page.wait_for_timeout(500)
+        # ၄။ Login ခလုတ်ကို နှိပ်ရန်
+        # Playwright Click
+        login_btn = page.locator('div.signIn__container-button').first
+        await login_btn.click(force=True)
+        await page.wait_for_timeout(1000)
         
-        # နည်းလမ်း (၂) - မရသေးပါက JavaScript ကို အသုံးပြု၍ အတင်း (Force) နှိပ်ခိုင်းမည်
-        await login_btn.evaluate("node => node.click()")
-        await page.wait_for_timeout(500)
+        # အရန်အနေဖြင့် JavaScript ဖြင့်ပါ ထပ်နှိပ်ပေးမည်
+        await page.evaluate("""
+            let btn = document.querySelector('div.signIn__container-button');
+            if (btn) {
+                btn.click();
+            }
+        """)
         
         # ၅။ Login ဝင်ပြီးနောက် ၅ စက္ကန့် စောင့်ဆိုင်းခြင်း
         await page.wait_for_timeout(5000)
@@ -90,6 +87,7 @@ async def login_via_ui(page, username, password):
         print(f"❌ Login ဝင်ရာတွင် အမှားအယွင်းရှိပါသည်: {e}")
         await page.screenshot(path="login_error.png")
         return False
+
 
 
 
