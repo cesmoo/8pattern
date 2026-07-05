@@ -1,5 +1,6 @@
 import asyncio
 import os
+import aiohttp # API ခေါ်ရန် လိုအပ်ပါသည်
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
@@ -10,7 +11,6 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import FSInputFile
 from playwright.async_api import async_playwright
 
-# .env ဖိုင်ကို ဖတ်ရန်
 load_dotenv()
 
 # ==========================================
@@ -21,92 +21,81 @@ OWNER_ID = int(os.getenv("OWNER_ID", "0"))
 GAME_URL = "https://www.777bigwingame.app/"
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-
-# ⚠️ ဒီစာကြောင်းလေး ပျက်သွားလို့ Error တက်တာဖြစ်ပါတယ်
 dp = Dispatcher() 
 
 # --- 🔄 System Variables ---
-MULTIPLIERS = [1, 2, 4, 8, 16, 32, 64] # Default လောင်းကြေးအဆင့်များ
-CUSTOM_PATTERN = ["BIG"] # Default Pattern (အမြဲတမ်း အကြီး)
+MULTIPLIERS = [1, 2, 4, 8, 16, 32, 64] 
+CUSTOM_PATTERN = ["BIG"] 
 current_step = 0
 current_pattern_index = 0
 is_bot_running = False
 
-# --- 🆕 Credentials တောင်းရန် State သတ်မှတ်ခြင်း ---
 class AutoBetState(StatesGroup):
     waiting_for_credentials = State()
 
 # ==========================================
-# 🔐 2. UI AUTO LOGIN LOGIC (VUE.JS JS INJECTION FIX)
+# ⚡ 2. API LOGIN & TOKEN INJECTION LOGIC
 # ==========================================
-async def login_via_ui(page, username, password):
-    print("🔄 ဝဘ်ဆိုဒ်သို့ ချိတ်ဆက်၍ Login ဝင်နေပါသည်...")
+async def login_via_api_and_inject(page, username, password):
+    print("🔄 API မှတစ်ဆင့် Token လှမ်းယူနေပါသည်...")
     
+    api_url = 'https://api.bigwinqaz.com/api/webapi/Login'
+    headers = {
+        'authority': 'api.bigwinqaz.com',
+        'accept': 'application/json, text/plain, */*',
+        'content-type': 'application/json;charset=UTF-8',
+        'origin': 'https://www.777bigwingame.app',
+        'referer': 'https://www.777bigwingame.app/',
+        'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36',
+    }
+    
+    # API ၏ လိုအပ်ချက်အရ ပုံသေ Data အချို့ ထည့်သွင်းထားသည်
+    json_data = {
+        'username': username,
+        'pwd': password,
+        'phonetype': 1,
+        'logintype': 'mobile',
+        'packId': '',
+        'deviceId': '51ed4ee0f338a1bb24063ffdfcd31ce6', 
+        'language': 7,
+        'random': '4fc4413428be43faa1a3f30d9745ae3a',
+        'signature': '5458639AF428AC897FDFF1102D82EB9C',
+        'timestamp': 1773326030,
+    }
+
     try:
-        await page.goto("https://www.777bigwingame.app/#/login", wait_until="networkidle")
-        await page.wait_for_timeout(3000)
-
-        print("🔄 အချက်အလက်များ ထည့်သွင်းနေပါသည်...")
-        
-        # Browser ထဲသို့ JavaScript တိုက်ရိုက်ထည့်သွင်းခြင်း (Vue.js ကို ကျော်ဖြတ်ရန်)
-        await page.evaluate(f"""
-            // (၁) ဖုန်းနံပါတ် ထည့်သွင်းခြင်း
-            let phone = document.querySelector('input[name="userNumber"]');
-            if (phone) {{
-                phone.value = '{username}';
-                phone.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                phone.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                phone.dispatchEvent(new Event('blur', {{ bubbles: true }}));
-            }}
+        # ၁။ API မှတစ်ဆင့် Login ဝင်ခြင်း
+        async with aiohttp.ClientSession() as session:
+            async with session.post(api_url, headers=headers, json=json_data, timeout=10.0) as response:
+                data = await response.json()
+                
+        if data and data.get('code') == 0:
+            # Token ကို ထုတ်ယူခြင်း
+            token_str = data.get('data', {}) if isinstance(data.get('data'), str) else data.get('data', {}).get('token', '')
+            print("✅ API Token ရရှိပါပြီ။ Browser သို့ ထည့်သွင်းနေပါသည်...")
             
-            // (၂) Password ထည့်သွင်းခြင်း
-            let pwdContainer = document.querySelector('.passwordInput__container');
-            if (pwdContainer) {{
-                let pwd = pwdContainer.querySelector('input');
-                if (pwd) {{
-                    pwd.value = '{password}';
-                    pwd.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    pwd.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                    pwd.dispatchEvent(new Event('blur', {{ bubbles: true }}));
-                }}
-            }}
-        """)
-        
-        await page.wait_for_timeout(1500) 
-
-        print("🔄 Login ခလုတ်ကို နှိပ်နေပါသည်...")
-        
-        # ၄။ Login ခလုတ်ကို နှိပ်ရန် (Playwright Click)
-        login_btn = page.locator('div.signIn__container-button').first
-        await login_btn.click(force=True)
-        await page.wait_for_timeout(1000)
-        
-        # အရန်အနေဖြင့် JavaScript ဖြင့်ပါ ထပ်နှိပ်ပေးမည်
-        await page.evaluate("""
-            let btn = document.querySelector('div.signIn__container-button');
-            if (btn) {
-                btn.click();
-            }
-        """)
-        
-        # ၅။ Login ဝင်ပြီးနောက် ၅ စက္ကန့် စောင့်ဆိုင်းခြင်း
-        await page.wait_for_timeout(5000)
-        
-        # URL စစ်ဆေးခြင်း
-        current_url = page.url
-        if "login" in current_url.lower():
-            await page.screenshot(path="login_error.png")
+            # ၂။ ရရှိလာသော Token ကို Browser ၏ Local Storage ထဲသို့ ထည့်သွင်းခြင်း
+            await page.goto(GAME_URL, wait_until="networkidle")
+            
+            await page.evaluate(f"""
+                localStorage.setItem('token', '{token_str}');
+                let vuexData = JSON.parse(localStorage.getItem('vuex') || '{{}}');
+                vuexData.token = '{token_str}';
+                localStorage.setItem('vuex', JSON.stringify(vuexData));
+            """)
+            
+            # ၃။ Token ဝင်သွားစေရန် စာမျက်နှာကို Refresh လုပ်ခြင်း
+            await page.reload(wait_until="networkidle")
+            await page.wait_for_timeout(3000)
+            
+            print("✅ API + Token Injection ဖြင့် Login ဝင်ခြင်း အောင်မြင်ပါပြီ။")
+            return True
+        else:
+            print(f"❌ API Login Failed: {data.get('msg', 'Unknown Error')}")
             return False
-            
-        await page.goto(GAME_URL)
-        await page.wait_for_timeout(3000)
-        
-        print("✅ UI မှတစ်ဆင့် Login ဝင်ခြင်း အောင်မြင်ပါပြီ။")
-        return True
 
     except Exception as e:
-        print(f"❌ Login ဝင်ရာတွင် အမှားအယွင်းရှိပါသည်: {e}")
-        await page.screenshot(path="login_error.png")
+        print(f"❌ API ခေါ်ယူရာတွင် အမှားအယွင်းရှိပါသည်: {e}")
         return False
 
 # ==========================================
@@ -146,7 +135,7 @@ async def check_win_status(page):
     try:
         win_popup = page.locator("div.WinningTip__C-body-l1:has-text('ဂုဏ်ယူပါတယ်')")
         if await win_popup.is_visible(timeout=5000):
-            await page.mouse.click(10, 10) # မျက်နှာပြင်လွတ်ကိုနှိပ်၍ Popup ပိတ်ရန်
+            await page.mouse.click(10, 10) 
             return True
         return False
     except:
@@ -247,10 +236,10 @@ async def start_autobet_with_creds(message: types.Message, state: FSMContext):
         f"🚀 <b>Auto Bet စတင်နေပါပြီ...</b>\n"
         f"👤 အကောင့်: <b>{USERNAME}</b>\n"
         f"📈 Multipliers: {steps_str}\n"
-        f"💰 Base Amount: 10 ကျပ်"
+        f"💰 Base Amount: 10 ကျပ်\n"
+        f"⚡ <i>(API ဖြင့် အမြန် Login ဝင်နေပါသည်...)</i>"
     )
 
-    # Playwright ကို နောက်ကွယ်မှ Run ခိုင်းခြင်း 
     asyncio.create_task(run_playwright_task(USERNAME, PASSWORD))
 
 # --- 🚀 Playwright Background Task ---
@@ -259,8 +248,6 @@ async def run_playwright_task(username, password):
     
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        
-        # Browser ကို ဖုန်းကဲ့သို့ အပြည့်အဝ ပုံဖျက်ခြင်း
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
             viewport={'width': 390, 'height': 844}, 
@@ -270,20 +257,23 @@ async def run_playwright_task(username, password):
         page = await context.new_page()
         
         try:
-            login_success = await login_via_ui(page, username, password)
+            # ⚡ UI အစား API ကို အသုံးပြု၍ Login ဝင်ခြင်း
+            login_success = await login_via_api_and_inject(page, username, password)
             
             if not login_success:
-                error_msg = "❌ Login ဝင်၍ မရပါ။ စကားဝှက်မှားနေခြင်း သို့မဟုတ် Captcha တောင်းနေခြင်း ဖြစ်နိုင်ပါသည်။"
+                error_msg = "❌ API Login Failed! စကားဝှက်မှားနေခြင်း ဖြစ်နိုင်ပါသည်။"
                 await bot.send_message(OWNER_ID, error_msg)
                 
-                if os.path.exists("login_error.png"):
-                    photo = FSInputFile("login_error.png")
-                    await bot.send_photo(OWNER_ID, photo, caption="📸 နောက်ကွယ်တွင် ဖြစ်ပေါ်နေသော မျက်နှာပြင်ပုံ")
-                    os.remove("login_error.png")
+                # အခြေအနေကို စစ်ဆေးရန် Screenshot ပို့ပေးမည်
+                await page.screenshot(path="api_error.png")
+                photo = FSInputFile("api_error.png")
+                await bot.send_photo(OWNER_ID, photo, caption="📸 API ဖြင့်ချိတ်ဆက်မှု မအောင်မြင်သော မျက်နှာပြင်")
+                if os.path.exists("api_error.png"): os.remove("api_error.png")
                 
                 is_bot_running = False
                 return 
             
+            # Login အောင်မြင်ပါက Game စတင်မည်
             while is_bot_running:
                 current_bet_type = CUSTOM_PATTERN[current_pattern_index % len(CUSTOM_PATTERN)]
                 display_type = "အကြီး (BIG) 🔴" if current_bet_type == "BIG" else "အသေး (SMALL) 🟢"
