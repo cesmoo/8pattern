@@ -35,7 +35,7 @@ class AutoBetState(StatesGroup):
     waiting_for_credentials = State()
 
 # ==========================================
-# 🔐 2. UI AUTO LOGIN LOGIC (HUMAN TYPING FIX)
+# 🔐 2. UI AUTO LOGIN LOGIC (TAP + JS CLICK FIX)
 # ==========================================
 async def login_via_ui(page, username, password):
     print("🔄 ဝဘ်ဆိုဒ်သို့ ချိတ်ဆက်၍ Login ဝင်နေပါသည်...")
@@ -44,25 +44,32 @@ async def login_via_ui(page, username, password):
         await page.goto("https://www.777bigwingame.app/#/login", wait_until="networkidle")
         await page.wait_for_timeout(3000)
 
-        # ၂။ ဖုန်းနံပါတ် ရိုက်ထည့်ရန် (လူရိုက်သကဲ့သို့ တစ်လုံးချင်းစီ ရိုက်မည်)
+        # ၂။ ဖုန်းနံပါတ် ရိုက်ထည့်ရန်
         await page.wait_for_selector('input[name="userNumber"]', timeout=10000)
         username_input = page.locator('input[name="userNumber"]').first
         await username_input.click()
-        await username_input.clear() # အကွက်ထဲမှာ စာရှိနေရင် အရင်ဖျက်ပါမည်
-        await username_input.press_sequentially(username, delay=150) 
-        await page.wait_for_timeout(1000)
+        await username_input.clear()
+        await username_input.press_sequentially(username, delay=100) 
+        await page.wait_for_timeout(500)
 
-        # ၃။ Password ရိုက်ထည့်ရန် (လူရိုက်သကဲ့သို့ တစ်လုံးချင်းစီ ရိုက်မည်)
+        # ၃။ Password ရိုက်ထည့်ရန်
         password_input = page.locator('.passwordInput__container-input input').first
         await password_input.click()
         await password_input.clear() 
-        # fill() အစား press_sequentially() ကို သုံး၍ လူအစစ်ကဲ့သို့ ပုံဖျက်သည်
-        await password_input.press_sequentially(password, delay=150)
-        await page.wait_for_timeout(1000)
+        await password_input.press_sequentially(password, delay=100)
+        await page.wait_for_timeout(500)
 
-        # ၄။ Login ခလုတ်ကို နှိပ်ရန်
+        # ၄။ Login ခလုတ်ကို နှိပ်ရန် (🔧 ဤနေရာကို အထူးပြုပြင်ထားသည်)
+        print("🔄 Login ခလုတ်ကို နှိပ်နေပါသည်...")
         login_btn = page.locator('.signIn__container-button').first
-        await login_btn.click(force=True) 
+        
+        # နည်းလမ်း (၁) - ဖုန်း Screen ကို Touch လုပ်သည့်ပုံစံဖြင့် အရင်နှိပ်မည်
+        await login_btn.tap(force=True)
+        await page.wait_for_timeout(500)
+        
+        # နည်းလမ်း (၂) - မရသေးပါက JavaScript ကို အသုံးပြု၍ အတင်း (Force) နှိပ်ခိုင်းမည်
+        await login_btn.evaluate("node => node.click()")
+        await page.wait_for_timeout(500)
         
         # ၅။ Login ဝင်ပြီးနောက် ၅ စက္ကန့် စောင့်ဆိုင်းခြင်း
         await page.wait_for_timeout(5000)
@@ -83,6 +90,7 @@ async def login_via_ui(page, username, password):
         print(f"❌ Login ဝင်ရာတွင် အမှားအယွင်းရှိပါသည်: {e}")
         await page.screenshot(path="login_error.png")
         return False
+
 
 
 # ==========================================
