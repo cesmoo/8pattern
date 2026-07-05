@@ -25,17 +25,24 @@ import matplotlib.patches as patches
 import warnings
 warnings.filterwarnings("ignore")
 
+# ==========================================
+# ⚙️ LOAD ENVIRONMENT
+# ==========================================
 load_dotenv()
 
 # ==========================================
 # ⚙️ CONFIGURATION
 # ==========================================
-USERNAME = os.getenv("BIGWIN_USERNAME", "959675323878")
+USERNAME = os.getenv("BIGWIN_USERNAME", "959680090540")
 PASSWORD = os.getenv("BIGWIN_PASSWORD", "Mitheint11")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
 MONGO_URI = os.getenv("MONGO_URI")
 OWNER_ID = os.getenv("OWNER_ID")
+MANUAL_TOKEN = os.getenv("MANUAL_TOKEN", "")
+
+# Debug Mode
+DEBUG = True  # True ဆိုရင် အသေးစိတ် log တွေပြမယ်
 
 if not all([BOT_TOKEN, CHANNEL_ID, MONGO_URI, OWNER_ID]):
     print("❌ Error: .env file missing required variables")
@@ -58,6 +65,8 @@ LAST_PROCESSED_ISSUE = None
 MAIN_MESSAGE_ID = None
 SESSION_START_ISSUE = None
 LAST_NOTIFIED_ISSUE = None
+LOGIN_ATTEMPTS = 0
+MAX_LOGIN_ATTEMPTS = 5
 
 BASE_HEADERS = {
     'authority': 'api.bigwinqaz.com',
@@ -93,55 +102,232 @@ AUTO_BET = {
 BET_HISTORY = []
 
 # ==========================================
-# 🔑 API FUNCTIONS
+# 🐛 DEBUG LOGGER
 # ==========================================
-async def fetch_with_retry(session, url, headers, json_data, retries=2):
+def debug_log(message, level="INFO"):
+    """Debug messages ကို ပြသပေးတယ်"""
+    if DEBUG:
+        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        print(f"[{timestamp}] [{level}] {message}")
+
+def debug_json(data, label="JSON Data"):
+    """JSON data ကို လှပစွာ ပြသပေးတယ်"""
+    if DEBUG:
+        print(f"📦 {label}:")
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+
+# ==========================================
+# 🔑 API FUNCTIONS WITH DEBUG
+# ==========================================
+async def fetch_with_retry(session, url, headers, json_data, retries=3):
+    """API request ကို retry နဲ့ ပို့တယ်"""
+    debug_log(f"🌐 Fetching: {url}")
+    debug_log(f"📤 Request data: {json.dumps(json_data, indent=2)}")
+    
     for attempt in range(retries):
         try:
-            async with session.post(url, headers=headers, json=json_data, timeout=5.0) as response:
+            debug_log(f"🔄 Attempt {attempt + 1}/{retries}")
+            
+            async with session.post(url, headers=headers, json=json_data, timeout=10.0) as response:
+                debug_log(f"📡 Response status: {response.status}")
+                
                 if response.status == 200:
-                    return await response.json()
+                    data = await response.json()
+                    debug_log(f"✅ Request successful")
+                    debug_json(data, "Response Data")
+                    return data
                 elif response.status == 401:
+                    debug_log("❌ 401 Unauthorized - Token expired")
                     return {"code": 401, "msg": "Token expired"}
+                else:
+                    debug_log(f"⚠️ Response status: {response.status}")
+                    try:
+                        data = await response.json()
+                        debug_json(data, "Error Response")
+                    except:
+                        pass
+                    
+        except asyncio.TimeoutError:
+            debug_log(f"⏰ Timeout on attempt {attempt + 1}")
         except Exception as e:
-            if attempt < retries - 1:
-                await asyncio.sleep(0.5)
-            else:
-                print(f"❌ Request failed: {e}")
+            debug_log(f"❌ Request error: {e}", "ERROR")
+            
+        if attempt < retries - 1:
+            wait_time = (attempt + 1) * 2
+            debug_log(f"⏳ Waiting {wait_time}s before retry...")
+            await asyncio.sleep(wait_time)
+    
+    debug_log("❌ All retries failed", "ERROR")
     return None
 
 async def login_and_get_token(session: aiohttp.ClientSession):
-    global CURRENT_TOKEN
+    """Login လုပ်ပြီး Token ရယူတယ်"""
+    global CURRENT_TOKEN, LOGIN_ATTEMPTS
+    
+    debug_log("🔐 ===== STARTING LOGIN PROCESS =====")
+    LOGIN_ATTEMPTS += 1
+    
+    if LOGIN_ATTEMPTS > MAX_LOGIN_ATTEMPTS:
+        debug_log(f"❌ Too many login attempts ({MAX_LOGIN_ATTEMPTS})", "ERROR")
+        return False
+    
+    username = os.getenv("BIGWIN_USERNAME", "959675323878")
+    password = os.getenv("BIGWIN_PASSWORD", "Mitheint11")
+    
+    debug_log(f"👤 Username: {username}")
+    debug_log(f"🔑 Password: {'*' * len(password)}")
+    
+    timestamp = int(time.time())
+    random_str = hashlib.md5(str(timestamp).encode()).hexdigest()
+    signature = hashlib.md5(f"{username}{password}{timestamp}".encode()).hexdigest().upper()
+    
     json_data = {
-        'username': USERNAME,
-        'pwd': PASSWORD,
+        'username': username,
+        'pwd': password,
         'phonetype': 1,
         'logintype': 'mobile',
         'packId': '',
         'deviceId': hashlib.md5(str(random.random()).encode()).hexdigest(),
         'language': 7,
-        'random': hashlib.md5(str(time.time()).encode()).hexdigest(),
-        'signature': hashlib.md5(f"{USERNAME}{PASSWORD}{time.time()}".encode()).hexdigest().upper(),
-        'timestamp': int(time.time()),
+        'random': random_str,
+        'signature': signature,
+        'timestamp': timestamp,
     }
-    data = await fetch_with_retry(session, 'https://api.bigwinqaz.com/api/webapi/Login', BASE_HEADERS, json_data)
-    if data and data.get('code') == 0:
-        token_str = data.get('data', {}) if isinstance(data.get('data'), str) else data.get('data', {}).get('token', '')
-        CURRENT_TOKEN = f"Bearer {token_str}"
-        print("✅ Login successful")
+    
+    debug_json(json_data, "Login Request")
+    
+    try:
+        async with session.post(
+            'https://api.bigwinqaz.com/api/webapi/Login',
+            headers=BASE_HEADERS,
+            json=json_data,
+            timeout=15.0
+        ) as response:
+            
+            debug_log(f"📡 Login response status: {response.status}")
+            
+            if response.status == 200:
+                data = await response.json()
+                debug_json(data, "Login Response")
+                
+                if data and data.get('code') == 0:
+                    token_data = data.get('data', {})
+                    
+                    if isinstance(token_data, str):
+                        token_str = token_data
+                    else:
+                        token_str = token_data.get('token', '')
+                    
+                    if token_str:
+                        CURRENT_TOKEN = f"Bearer {token_str}"
+                        debug_log(f"✅ Login successful!")
+                        debug_log(f"🔐 Token: {CURRENT_TOKEN[:50]}...")
+                        LOGIN_ATTEMPTS = 0
+                        return True
+                    else:
+                        debug_log("❌ No token in response", "ERROR")
+                        return False
+                else:
+                    msg = data.get('msg', 'Unknown error')
+                    debug_log(f"❌ Login failed: {msg}", "ERROR")
+                    return False
+            else:
+                debug_log(f"❌ HTTP Error: {response.status}", "ERROR")
+                return False
+                
+    except asyncio.TimeoutError:
+        debug_log("❌ Login timeout", "ERROR")
+        return False
+    except Exception as e:
+        debug_log(f"❌ Login error: {e}", "ERROR")
+        return False
+
+async def get_token_manual():
+    """Manual Token ကို .env ကနေ ဖတ်တယ်"""
+    global CURRENT_TOKEN
+    
+    manual_token = os.getenv("MANUAL_TOKEN", "")
+    
+    if manual_token:
+        CURRENT_TOKEN = f"Bearer {manual_token}"
+        debug_log(f"✅ Manual token loaded: {CURRENT_TOKEN[:50]}...")
         return True
-    print("❌ Login failed")
+    
+    debug_log("ℹ️ No manual token found in .env")
     return False
+
+async def ensure_valid_token(session: aiohttp.ClientSession):
+    """Token ကို စစ်ဆေးပြီး မရှိရင် ရယူတယ်"""
+    global CURRENT_TOKEN
+    
+    debug_log("🔍 Checking token validity...")
+    
+    # Manual Token အရင်စစ်တယ်
+    if not CURRENT_TOKEN:
+        debug_log("ℹ️ No token found, checking manual token...")
+        if await get_token_manual():
+            debug_log("✅ Manual token loaded")
+            return True
+    
+    # Token ရှိရင် validity စစ်တယ်
+    if CURRENT_TOKEN:
+        debug_log("🔍 Testing existing token...")
+        try:
+            headers = BASE_HEADERS.copy()
+            headers['authorization'] = CURRENT_TOKEN
+            
+            json_data = {
+                'pageSize': 1,
+                'pageNo': 1,
+                'typeId': 30,
+                'language': 7,
+                'random': hashlib.md5(str(time.time()).encode()).hexdigest(),
+                'signature': hashlib.md5(f"test{time.time()}".encode()).hexdigest().upper(),
+                'timestamp': int(time.time()),
+            }
+            
+            async with session.post(
+                'https://api.bigwinqaz.com/api/webapi/GetNoaverageEmerdList',
+                headers=headers,
+                json=json_data,
+                timeout=5.0
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get('code') != 401:
+                        debug_log("✅ Token is valid")
+                        return True
+                    else:
+                        debug_log("🔄 Token expired")
+                        CURRENT_TOKEN = ""
+                else:
+                    debug_log(f"⚠️ Token check failed: {response.status}")
+                    CURRENT_TOKEN = ""
+                    
+        except Exception as e:
+            debug_log(f"⚠️ Token check error: {e}")
+            CURRENT_TOKEN = ""
+    
+    # Token မရှိရင် Login လုပ်တယ်
+    debug_log("🔄 Attempting login to get new token...")
+    return await login_and_get_token(session)
 
 # ==========================================
 # 🧠 AI PREDICTION
 # ==========================================
 def dynamic_history_predict(history_docs):
+    """သမိုင်းကြောင်းကို ခွဲခြမ်းစိတ်ဖြာပြီး ခန့်မှန်းတယ်"""
+    debug_log("🧠 Starting AI prediction...")
+    
     if len(history_docs) < 10:
+        debug_log("⏳ Not enough data (need 10+ records)")
         return "BIG (အကြီး) 🔴", 55.0, "⏳ Collecting data..."
 
     docs = list(reversed(history_docs))
     all_history = [d.get('size', 'BIG') for d in docs]
+    
+    debug_log(f"📊 Analyzing {len(all_history)} history records")
+    debug_log(f"📊 Recent pattern: {all_history[-10:]}")
 
     predicted = "BIG (အကြီး) 🔴"
     base_prob = 55.0
@@ -171,6 +357,8 @@ def dynamic_history_predict(history_docs):
                 big_prob = (big_next_count / total_pattern_matches) * 100
                 small_prob = (small_next_count / total_pattern_matches) * 100
                 pattern_str = "-".join(recent_pattern).replace('BIG', 'B').replace('SMALL', 'S')
+                
+                debug_log(f"📊 Pattern '{pattern_str}': BIG={big_prob}%, SMALL={small_prob}%")
 
                 if big_prob > small_prob:
                     predicted = "BIG (အကြီး) 🔴"
@@ -191,17 +379,24 @@ def dynamic_history_predict(history_docs):
     if not pattern_found:
         b_count = all_history.count("BIG")
         s_count = all_history.count("SMALL")
+        debug_log(f"📊 No pattern found. BIG={b_count}, SMALL={s_count}")
         predicted = "BIG (အကြီး) 🔴" if s_count > b_count else "SMALL (အသေး) 🟢"
         base_prob = 55.0
         reason = "Majority trend"
 
     final_prob = min(round(base_prob, 1), 98.0)
+    debug_log(f"🎯 Prediction: {predicted} ({final_prob}%)")
+    debug_log(f"💡 Reason: {reason}")
+    
     return predicted, final_prob, reason
 
 # ==========================================
 # 📊 GRAPH GENERATOR
 # ==========================================
 def generate_winrate_chart(predictions):
+    """Win rate chart ကိုဆွဲတယ်"""
+    debug_log("📊 Generating chart...")
+    
     wins, losses = 0, 0
     bar_colors, dots_list, bar_heights = [], [], []
     history_wr = []
@@ -226,6 +421,8 @@ def generate_winrate_chart(predictions):
 
     total_played = wins + losses
     win_rate = int((wins / total_played * 100)) if total_played > 0 else 0
+
+    debug_log(f"📊 Chart: {wins}W/{losses}L = {win_rate}%")
 
     fig = plt.figure(figsize=(10.24, 7.68), facecolor='#1c1f26')
 
@@ -330,19 +527,26 @@ def generate_winrate_chart(predictions):
     plt.savefig(buf, format='png', dpi=100, facecolor='#1c1f26')
     buf.seek(0)
     plt.close(fig)
+    
+    debug_log("✅ Chart generated successfully")
     return buf
 
 # ==========================================
 # 🎯 PLACE BET
 # ==========================================
 async def place_bet(session: aiohttp.ClientSession, predicted_size: str, amount: int):
+    """Bet ထိုးတယ်"""
     global CURRENT_TOKEN
 
+    debug_log(f"🎯 Placing bet: {predicted_size}, Amount: {amount}")
+
     if not CURRENT_TOKEN:
-        if not await login_and_get_token(session):
+        debug_log("❌ No token, cannot place bet", "ERROR")
+        if not await ensure_valid_token(session):
             return None
 
     bet_direction = "BIG" if "BIG" in predicted_size else "SMALL"
+    debug_log(f"🎯 Direction: {bet_direction}")
 
     headers = BASE_HEADERS.copy()
     headers['authorization'] = CURRENT_TOKEN
@@ -357,6 +561,8 @@ async def place_bet(session: aiohttp.ClientSession, predicted_size: str, amount:
         "timestamp": int(time.time())
     }
 
+    debug_json(json_data, "Bet Request")
+
     try:
         data = await fetch_with_retry(
             session,
@@ -365,35 +571,52 @@ async def place_bet(session: aiohttp.ClientSession, predicted_size: str, amount:
             json_data,
             retries=2
         )
+        
+        if data and data.get('code') == 0:
+            debug_log("✅ Bet placed successfully")
+            debug_json(data, "Bet Response")
+        else:
+            debug_log(f"❌ Bet failed: {data}", "ERROR")
+            
         return data
+        
     except Exception as e:
-        print(f"❌ Bet error: {e}")
+        debug_log(f"❌ Bet error: {e}", "ERROR")
         return None
 
 # ==========================================
 # 🎯 AUTO BET HANDLER
 # ==========================================
 async def auto_bet_handler(session: aiohttp.ClientSession):
+    """Auto Bet ကို စီမံခန့်ခွဲတယ်"""
     global AUTO_BET, LAST_PROCESSED_ISSUE
 
     if not AUTO_BET["enabled"]:
+        debug_log("ℹ️ AutoBet is disabled")
         return
+
+    debug_log("🎯 AutoBet handler running...")
 
     pred_cursor = predictions_collection.find().sort("issue_number", -1).limit(1)
     predictions = await pred_cursor.to_list(length=1)
 
     if not predictions:
+        debug_log("ℹ️ No predictions found")
         return
 
     latest_pred = predictions[0]
     issue_number = latest_pred.get("issue_number")
     predicted_size = latest_pred.get("predicted_size", "BIG")
 
+    debug_log(f"📊 Latest prediction: {issue_number} -> {predicted_size}")
+
     if AUTO_BET["last_bet_issue"] == issue_number:
+        debug_log(f"ℹ️ Already bet on issue {issue_number}")
         return
 
     # Martingale calculation
     amount = AUTO_BET["base_amount"] * (2 ** AUTO_BET["martingale_level"])
+    debug_log(f"💰 Bet amount: {amount} (Level: {AUTO_BET['martingale_level']})")
 
     # Place bet
     result = await place_bet(session, predicted_size, amount)
@@ -413,12 +636,14 @@ async def auto_bet_handler(session: aiohttp.ClientSession):
             AUTO_BET["current_streak"] = 0
             AUTO_BET["martingale_level"] = 0
             status_text = "✅ WIN"
+            debug_log(f"✅ WIN! Amount: {win_amount}")
         else:
             AUTO_BET["loss_count"] += 1
             AUTO_BET["total_profit"] -= amount
             AUTO_BET["current_streak"] += 1
             AUTO_BET["martingale_level"] += 1
             status_text = "❌ LOSS"
+            debug_log(f"❌ LOSS! Amount: {amount}")
 
         if AUTO_BET["current_streak"] > AUTO_BET["max_streak"]:
             AUTO_BET["max_streak"] = AUTO_BET["current_streak"]
@@ -436,43 +661,57 @@ async def auto_bet_handler(session: aiohttp.ClientSession):
         if AUTO_BET["max_bets"] > 0 and AUTO_BET["bet_count"] >= AUTO_BET["max_bets"]:
             AUTO_BET["enabled"] = False
             AUTO_BET["status"] = "stopped"
-            print(f"⏹ AutoBet stopped: Max bets reached ({AUTO_BET['bet_count']})")
+            debug_log(f"⏹ AutoBet stopped: Max bets reached ({AUTO_BET['bet_count']})")
 
         if AUTO_BET["martingale_level"] >= 5:
             AUTO_BET["enabled"] = False
             AUTO_BET["status"] = "stopped"
-            print("⏹ AutoBet stopped: 5 consecutive losses!")
+            debug_log("⏹ AutoBet stopped: 5 consecutive losses!")
 
-        print(f"🎯 [{issue_number}] {status_text} | Amount: {amount} | Profit: {AUTO_BET['total_profit']}")
+        debug_log(f"📊 Stats: Bets={AUTO_BET['bet_count']}, Profit={AUTO_BET['total_profit']}")
 
     else:
-        print(f"❌ Bet failed for issue {issue_number}")
+        debug_log(f"❌ Bet failed for issue {issue_number}", "ERROR")
 
 # ==========================================
 # 🚀 CORE LOGIC
 # ==========================================
 async def check_game_and_predict(session: aiohttp.ClientSession):
+    """Game data ကိုစစ်ပြီး Prediction လုပ်တယ်"""
     global CURRENT_TOKEN, LAST_PROCESSED_ISSUE, MAIN_MESSAGE_ID, SESSION_START_ISSUE
     global LAST_NOTIFIED_ISSUE
 
+    debug_log("🔍 Checking game and prediction...")
+
     if not CURRENT_TOKEN:
-        if not await login_and_get_token(session):
+        debug_log("🔄 No token, getting one...")
+        if not await ensure_valid_token(session):
+            debug_log("❌ Failed to get token", "ERROR")
             return False
 
     headers = BASE_HEADERS.copy()
     headers['authorization'] = CURRENT_TOKEN
 
     json_data = {
-        'pageSize': 10, 'pageNo': 1, 'typeId': 30, 'language': 7,
+        'pageSize': 10,
+        'pageNo': 1,
+        'typeId': 30,
+        'language': 7,
         'random': hashlib.md5(str(time.time()).encode()).hexdigest(),
         'signature': hashlib.md5(f"GetNoaverageEmerdList{time.time()}".encode()).hexdigest().upper(),
         'timestamp': int(time.time()),
     }
 
-    data = await fetch_with_retry(session, 'https://api.bigwinqaz.com/api/webapi/GetNoaverageEmerdList', headers, json_data)
+    data = await fetch_with_retry(
+        session,
+        'https://api.bigwinqaz.com/api/webapi/GetNoaverageEmerdList',
+        headers,
+        json_data
+    )
 
     if data and data.get('code') == 0:
         records = data.get("data", {}).get("list", [])
+        debug_log(f"📊 Found {len(records)} records")
 
         if records:
             latest_record = records[0]
@@ -481,6 +720,8 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
             latest_size = "BIG" if latest_number >= 5 else "SMALL"
             latest_parity = "EVEN" if latest_number % 2 == 0 else "ODD"
 
+            debug_log(f"📊 Latest: Issue={latest_issue}, Number={latest_number}, Size={latest_size}")
+
             is_new_issue = False
             if not LAST_PROCESSED_ISSUE:
                 is_new_issue = True
@@ -488,31 +729,45 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                 is_new_issue = True
 
             if is_new_issue:
+                debug_log(f"🆕 New issue detected: {latest_issue}")
                 LAST_PROCESSED_ISSUE = latest_issue
                 if not SESSION_START_ISSUE:
                     SESSION_START_ISSUE = latest_issue
 
+                # Save history
                 await history_collection.update_one(
                     {"issue_number": latest_issue},
                     {"$setOnInsert": {
-                        "number": latest_number, "size": latest_size,
-                        "parity": latest_parity, "time_context": "CURRENT"
-                    }}, upsert=True
+                        "number": latest_number,
+                        "size": latest_size,
+                        "parity": latest_parity,
+                        "time_context": "CURRENT"
+                    }},
+                    upsert=True
                 )
+                debug_log(f"💾 Saved history: {latest_issue}")
 
+                # Check prediction result
                 pred_doc = await predictions_collection.find_one({"issue_number": latest_issue})
                 if pred_doc and pred_doc.get("predicted_size"):
                     db_predicted_size = pred_doc.get("predicted_size")
                     clean_predicted = "BIG" if "BIG" in db_predicted_size else "SMALL"
                     is_win = (clean_predicted == latest_size)
                     win_lose_status = "WIN ✅" if is_win else "LOSE ❌"
+                    
                     await predictions_collection.update_one(
                         {"issue_number": latest_issue},
-                        {"$set": {"actual_size": latest_size, "actual_number": latest_number, "win_lose": win_lose_status}}
+                        {"$set": {
+                            "actual_size": latest_size,
+                            "actual_number": latest_number,
+                            "win_lose": win_lose_status
+                        }}
                     )
+                    debug_log(f"📊 Prediction result: {win_lose_status}")
 
                 next_issue = str(int(latest_issue) + 1)
 
+                # Session check
                 current_session_count = await predictions_collection.count_documents({
                     "issue_number": {"$gte": SESSION_START_ISSUE},
                     "win_lose": {"$ne": None}
@@ -520,8 +775,12 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
 
                 if current_session_count >= 20:
                     SESSION_START_ISSUE = next_issue
+                    debug_log(f"🔄 New session started: {SESSION_START_ISSUE}")
 
-                recent_preds_cursor = predictions_collection.find({"win_lose": {"$ne": None}}).sort("issue_number", -1).limit(15)
+                # Check losing streak
+                recent_preds_cursor = predictions_collection.find(
+                    {"win_lose": {"$ne": None}}
+                ).sort("issue_number", -1).limit(15)
                 recent_preds = await recent_preds_cursor.to_list(length=15)
 
                 current_lose_streak = 0
@@ -531,6 +790,9 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                     else:
                         break
 
+                debug_log(f"📊 Current losing streak: {current_lose_streak}")
+
+                # Alert for 5+ losses
                 if current_lose_streak >= 5 and LAST_NOTIFIED_ISSUE != latest_issue:
                     try:
                         alert_text = (
@@ -541,29 +803,39 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                         )
                         await bot.send_message(chat_id=OWNER_ID, text=alert_text)
                         LAST_NOTIFIED_ISSUE = latest_issue
+                        debug_log(f"📨 Alert sent to owner")
                     except Exception as e:
-                        pass
+                        debug_log(f"❌ Alert error: {e}", "ERROR")
 
+                # Get history for prediction
                 cursor = history_collection.find().sort("issue_number", -1).limit(5000)
                 history_docs = await cursor.to_list(length=5000)
+                debug_log(f"📊 Loaded {len(history_docs)} history records")
 
+                # Make prediction
                 try:
-                    mem_pred, mem_prob, mem_logic = await asyncio.to_thread(dynamic_history_predict, history_docs)
+                    mem_pred, mem_prob, mem_logic = await asyncio.to_thread(
+                        dynamic_history_predict, history_docs
+                    )
                     predicted = mem_pred
                     reason = mem_logic
                     final_prob = mem_prob
                 except Exception as e:
+                    debug_log(f"❌ Prediction error: {e}", "ERROR")
                     predicted = "BIG (အကြီး) 🔴"
                     final_prob = 55.0
                     reason = "⚠️ AI Processing Error"
 
+                # Save prediction
                 predicted_result_db = "BIG" if "BIG" in predicted else "SMALL"
                 await predictions_collection.update_one(
                     {"issue_number": next_issue},
                     {"$set": {"predicted_size": predicted_result_db}},
                     upsert=True
                 )
+                debug_log(f"💾 Saved prediction: {next_issue} -> {predicted_result_db}")
 
+                # Bet advice
                 bet_advice = ""
                 if current_lose_streak == 0:
                     bet_advice = "💰 <b>Bet:</b> Base (1x)"
@@ -576,13 +848,16 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                 else:
                     bet_advice = "⚠️ <b>[DANGER] 4+ consecutive losses!</b>\nStop or restart from 1x."
 
+                # Get session predictions
                 pred_cursor = predictions_collection.find({
                     "issue_number": {"$gte": SESSION_START_ISSUE},
                     "win_lose": {"$ne": None}
                 }).sort("issue_number", -1)
 
                 session_preds = await pred_cursor.to_list(length=20)
+                debug_log(f"📊 Found {len(session_preds)} session predictions")
 
+                # Build table
                 table_str = "<code>Period    | Result  | W/L\n"
                 table_str += "----------|---------|----\n"
                 for p in session_preds[:10]:
@@ -595,10 +870,12 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                     table_str += f"{iss_short:<10}| {res_str:<7} | {wl_str}\n"
                 table_str += "</code>"
 
+                # Generate chart
                 img_buf = await asyncio.to_thread(generate_winrate_chart, session_preds)
                 unique_filename = f"winrate_chart_{int(time.time())}.png"
                 photo = BufferedInputFile(img_buf.read(), filename=unique_filename)
 
+                # Prepare message
                 sec_left = 30 - (int(time.time()) % 30)
                 iss_display = f"{next_issue[:3]}**{next_issue[-4:]}"
 
@@ -614,58 +891,102 @@ async def check_game_and_predict(session: aiohttp.ClientSession):
                     f"{bet_advice}"
                 )
 
+                # Send/update message
                 if MAIN_MESSAGE_ID:
                     try:
                         media = InputMediaPhoto(media=photo, caption=tg_caption, parse_mode="HTML")
-                        await bot.edit_message_media(chat_id=CHANNEL_ID, message_id=MAIN_MESSAGE_ID, media=media)
-                    except Exception:
+                        await bot.edit_message_media(
+                            chat_id=CHANNEL_ID,
+                            message_id=MAIN_MESSAGE_ID,
+                            media=media
+                        )
+                        debug_log(f"📨 Updated message: {MAIN_MESSAGE_ID}")
+                    except Exception as e:
+                        debug_log(f"⚠️ Edit error: {e}")
                         msg = await bot.send_photo(chat_id=CHANNEL_ID, photo=photo, caption=tg_caption)
                         MAIN_MESSAGE_ID = msg.message_id
+                        debug_log(f"📨 New message: {MAIN_MESSAGE_ID}")
                 else:
                     msg = await bot.send_photo(chat_id=CHANNEL_ID, photo=photo, caption=tg_caption)
                     MAIN_MESSAGE_ID = msg.message_id
+                    debug_log(f"📨 First message: {MAIN_MESSAGE_ID}")
 
                 return True
-        return False
-
-    elif data and (data.get('code') == 401 or "token" in str(data.get('msg')).lower()):
-        CURRENT_TOKEN = ""
+        else:
+            debug_log("ℹ️ No records found")
+            return False
+    else:
+        debug_log(f"❌ API error: {data}", "ERROR")
+        if data and data.get('code') == 401:
+            debug_log("🔄 Token expired, clearing...")
+            CURRENT_TOKEN = ""
         return False
 
     return False
 
 # ==========================================
-# ⏱️ SCHEDULER
+# ⏱️ SCHEDULER WITH DEBUG
 # ==========================================
 async def auto_broadcaster_with_bet():
+    """Main scheduler with debug"""
+    global AUTO_BET, LOGIN_ATTEMPTS
+    
+    debug_log("🚀 ===== STARTING AUTO BROADCASTER =====")
     await init_db()
+    
     async with aiohttp.ClientSession() as session:
-        await login_and_get_token(session)
+        # Get token
+        token_ok = await ensure_valid_token(session)
+        if not token_ok:
+            debug_log("❌ Failed to get token", "ERROR")
+        
         while True:
             current_time = time.time()
             sec_passed = int(current_time) % 30
-
+            
+            # Debug: Show timing
+            if sec_passed == 0:
+                debug_log(f"⏰ New cycle: {datetime.now().strftime('%H:%M:%S')}")
+            
+            # Token check every minute
+            if int(current_time) % 60 == 0:
+                debug_log("🔄 Periodic token check...")
+                await ensure_valid_token(session)
+            
+            # Main execution window
             if 5 <= sec_passed <= 28:
+                debug_log(f"⏰ Execution window: {sec_passed}s")
+                
                 try:
                     is_processed = await check_game_and_predict(session)
                     if is_processed:
+                        debug_log("✅ Prediction processed")
+                        
+                        # Auto bet if enabled
                         if AUTO_BET["enabled"]:
+                            debug_log("🎯 AutoBet is enabled, placing bet...")
                             await auto_bet_handler(session)
+                        
+                        # Skip to next cycle
                         sleep_time = 30 - (int(time.time()) % 30)
-                        await asyncio.sleep(sleep_time)
+                        if sleep_time > 0:
+                            debug_log(f"⏳ Sleeping {sleep_time}s until next cycle")
+                            await asyncio.sleep(sleep_time)
                         continue
                 except Exception as e:
-                    print(f"❌ Error: {e}")
-
+                    debug_log(f"❌ Error in main loop: {e}", "ERROR")
+                    await asyncio.sleep(2)
+            
             await asyncio.sleep(0.5)
 
 async def init_db():
+    """Initialize MongoDB"""
     try:
         await history_collection.create_index("issue_number", unique=True)
         await predictions_collection.create_index("issue_number", unique=True)
-        print("✅ MongoDB connected")
+        debug_log("✅ MongoDB connected and indexes created")
     except Exception as e:
-        print(f"❌ MongoDB error: {e}")
+        debug_log(f"❌ MongoDB error: {e}", "ERROR")
 
 # ==========================================
 # 🤖 TELEGRAM COMMANDS
@@ -673,6 +994,7 @@ async def init_db():
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
+    debug_log(f"📨 /start from {message.from_user.id}")
     await message.reply(
         "👋 <b>Welcome to AI Prediction Bot!</b>\n\n"
         "📌 <b>Commands:</b>\n"
@@ -680,13 +1002,23 @@ async def cmd_start(message: types.Message):
         "/stopbet - Stop Auto Bet\n"
         "/betstat - Show Statistics\n"
         "/betsettings - Change Settings\n"
-        "/status - Check System Status\n\n"
+        "/status - Check System Status\n"
+        "/debug - Toggle Debug Mode\n\n"
         "⚠️ Use at your own risk!"
     )
+
+@dp.message(Command("debug"))
+async def cmd_debug(message: types.Message):
+    global DEBUG
+    DEBUG = not DEBUG
+    debug_log(f"🐛 Debug mode: {'ON' if DEBUG else 'OFF'}")
+    await message.reply(f"🐛 Debug mode: {'ON' if DEBUG else 'OFF'}")
 
 @dp.message(Command("autobet"))
 async def cmd_autobet(message: types.Message):
     global AUTO_BET
+    
+    debug_log(f"📨 /autobet from {message.from_user.id}")
 
     if AUTO_BET["enabled"]:
         await message.reply("⚠️ AutoBet is already running.")
@@ -715,6 +1047,8 @@ async def cmd_autobet(message: types.Message):
 @dp.message(Command("stopbet"))
 async def cmd_stopbet(message: types.Message):
     global AUTO_BET
+    
+    debug_log(f"📨 /stopbet from {message.from_user.id}")
 
     if not AUTO_BET["enabled"]:
         await message.reply("⚠️ AutoBet is not running.")
@@ -737,6 +1071,7 @@ async def cmd_stopbet(message: types.Message):
 
 @dp.message(Command("betstat"))
 async def cmd_betstat(message: types.Message):
+    debug_log(f"📨 /betstat from {message.from_user.id}")
     stats = get_bet_stats()
     msg = (
         f"📊 <b>AutoBet Statistics</b>\n"
@@ -755,6 +1090,8 @@ async def cmd_betstat(message: types.Message):
 @dp.message(Command("betsettings"))
 async def cmd_betsettings(message: types.Message):
     global AUTO_BET
+    
+    debug_log(f"📨 /betsettings from {message.from_user.id}")
 
     args = message.text.split()
     if len(args) < 3:
@@ -817,11 +1154,13 @@ async def cmd_betsettings(message: types.Message):
 
 @dp.message(Command("status"))
 async def cmd_status(message: types.Message):
+    debug_log(f"📨 /status from {message.from_user.id}")
     stats = get_bet_stats()
     msg = (
         f"📊 <b>System Status</b>\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"🔐 <b>Token:</b> {'✅ Valid' if CURRENT_TOKEN else '❌ Missing'}\n"
+        f"🐛 <b>Debug:</b> {'🟢 ON' if DEBUG else '🔴 OFF'}\n"
         f"🎯 <b>AutoBet:</b> {'🟢 Running' if AUTO_BET['enabled'] else '🔴 Stopped'}\n"
         f"📊 <b>Status:</b> {stats['status'].upper()}\n"
         f"🎮 <b>Game:</b> {AUTO_BET['game_type']}\n"
@@ -854,17 +1193,30 @@ def get_bet_stats():
 # 🚀 MAIN
 # ==========================================
 async def main():
+    print("=" * 60)
     print("🚀 AI Prediction + AutoBet Bot Starting...")
+    print(f"🐛 Debug Mode: {'ON' if DEBUG else 'OFF'}")
     print(f"📊 Game: {AUTO_BET['game_type']}")
     print(f"💰 Base Amount: {AUTO_BET['base_amount']}")
-    print("=" * 50)
-
+    print("=" * 60)
+    
+    debug_log("🔧 Bot initialization started")
+    
     await bot.delete_webhook(drop_pending_updates=True)
+    debug_log("✅ Webhook cleared")
+    
     asyncio.create_task(auto_broadcaster_with_bet())
+    debug_log("✅ Scheduler started")
+    
+    debug_log("🚀 Bot is ready!")
+    print("=" * 60)
+    
     await dp.start_polling(bot)
 
 if __name__ == '__main__':
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n⏹ Bot stopped.")
+        print("\n⏹ Bot stopped by user.")
+    except Exception as e:
+        print(f"❌ Fatal error: {e}")
