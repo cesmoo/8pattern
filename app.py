@@ -35,48 +35,45 @@ class AutoBetState(StatesGroup):
     waiting_for_credentials = State()
 
 # ==========================================
-# 🔐 2. UI AUTO LOGIN LOGIC (FIXED PASSWORD INPUT)
+# 🔐 2. UI AUTO LOGIN LOGIC (MOBILE TOUCH FIX)
 # ==========================================
 async def login_via_ui(page, username, password):
     print("🔄 ဝဘ်ဆိုဒ်သို့ ချိတ်ဆက်၍ Login ဝင်နေပါသည်...")
     
     try:
-        # ဝဘ်ဆိုဒ် အပြည့်အဝ တက်လာသည်အထိ စောင့်ရန်
         await page.goto("https://www.777bigwingame.app/#/login", wait_until="networkidle")
         await page.wait_for_timeout(3000)
 
-        # ၂။ ဖုန်းနံပါတ် ရိုက်ထည့်ရန် (ယခုအပိုင်း အလုပ်လုပ်ပါသည်)
+        # ၂။ ဖုန်းနံပါတ် ရိုက်ထည့်ရန်
         await page.wait_for_selector('input[name="userNumber"]', timeout=10000)
         username_input = page.locator('input[name="userNumber"]')
+        await username_input.click() # အကွက်ကို အရင် Touch လုပ်မည်
         await username_input.fill(username)
         await page.wait_for_timeout(1000)
 
-        # ၃။ Password ရိုက်ထည့်ရန် (🔧 ဤနေရာကို ပိုမိုတိကျအောင် ပြင်ဆင်ထားသည်)
-        # Class ကို တိုက်ရိုက်ခေါ်ပြီး click အရင်လုပ်ပါမည်
-        password_input = page.locator('.passwordInput__container-input input').first
-        await password_input.wait_for(state="visible", timeout=5000)
-        await password_input.click() # စာမရိုက်ခင် အကွက်ကို အရင်ရွေးချယ်မည်
+        # ၃။ Password ရိုက်ထည့်ရန်
+        password_input = page.locator('div.passwordInput__container-input input')
+        await password_input.click() # အကွက်ကို အရင် Touch လုပ်မည်
         await password_input.fill(password)
-        await page.wait_for_timeout(1000)
-          
-        # ၄။ Login ခလုတ်ကို နှိပ်ရန် (🔧 JS ဖြင့် အတင်းနှိပ်ခိုင်းခြင်း)
-        await page.wait_for_timeout(1000) # ခလုတ်ပေါ်လာရန် ခဏစောင့်မည်
-        login_btn = page.locator('div.signIn__container-button').first
-        
-        # ရိုးရိုး Click အစား JavaScript ကို အသုံးပြု၍ တိုက်ရိုက် Action ယူခြင်း
-        await login_btn.evaluate("node => node.click()")
+        await page.wait_for_timeout(500)
 
+        # Keyboard မှ 'Enter' ခေါက်သည့်ပုံစံကို အသုံးပြုခြင်း
+        await password_input.press("Enter")
+        await page.wait_for_timeout(1000)
+
+        # ၄။ Login ခလုတ်ကို နှိပ်ရန် (Force click နှင့် Delay ထည့်ထားသည်)
+        login_btn = page.locator('div.signIn__container-button').first
+        await login_btn.click(force=True, delay=200) 
         
         # ၅။ Login ဝင်ပြီးနောက် ၅ စက္ကန့် စောင့်ဆိုင်းခြင်း
         await page.wait_for_timeout(5000)
         
-        # URL စစ်ဆေးခြင်း (Login အောင်မြင်ပါက URL ပြောင်းသွားရမည်)
+        # URL စစ်ဆေးခြင်း
         current_url = page.url
         if "login" in current_url.lower():
             await page.screenshot(path="login_error.png")
             return False
             
-        # Game ရှိရာ စာမျက်နှာသို့ ဆက်သွားရန်
         await page.goto(GAME_URL)
         await page.wait_for_timeout(3000)
         
@@ -87,7 +84,6 @@ async def login_via_ui(page, username, password):
         print(f"❌ Login ဝင်ရာတွင် အမှားအယွင်းရှိပါသည်: {e}")
         await page.screenshot(path="login_error.png")
         return False
-
 
 # ==========================================
 # 🤖 3. PLAYWRIGHT AUTO BET LOGIC
@@ -201,7 +197,7 @@ async def ask_credentials(message: types.Message, state: FSMContext):
     
     await message.reply(
         "🔑 ကျေးဇူးပြု၍ Login ဝင်မည့် <b>ဖုန်းနံပါတ်</b> နှင့် <b>Password</b> ကို ကွက်လပ်ခြား၍ ရိုက်ထည့်ပါ။\n\n"
-        "ဥပမာ - <code>959680090540 Mitheint11</code>"
+        "ဥပမာ - <code>09680090540 Mitheint11</code>"
     )
     await state.set_state(AutoBetState.waiting_for_credentials)
 
@@ -211,7 +207,7 @@ async def start_autobet_with_creds(message: types.Message, state: FSMContext):
 
     parts = message.text.strip().split()
     if len(parts) != 2:
-        return await message.reply("❌ ပုံစံမှားယွင်းနေပါသည်။ ဖုန်းနံပါတ် နှင့် Password ကိုသာ ကွက်လပ်ခြား၍ ရိုက်ထည့်ပါ။\nဥပမာ - <code>959680090540 Mitheint11</code>")
+        return await message.reply("❌ ပုံစံမှားယွင်းနေပါသည်။ ဖုန်းနံပါတ် နှင့် Password ကိုသာ ကွက်လပ်ခြား၍ ရိုက်ထည့်ပါ။\nဥပမာ - <code>09680090540 Mitheint11</code>")
 
     USERNAME = parts[0]
     PASSWORD = parts[1]
@@ -233,15 +229,19 @@ async def start_autobet_with_creds(message: types.Message, state: FSMContext):
     # Playwright ကို နောက်ကွယ်မှ Run ခိုင်းခြင်း (Background Task)
     asyncio.create_task(run_playwright_task(USERNAME, PASSWORD))
 
-# --- 🚀 Playwright Background Task ---
+# --- 🚀 Playwright Background Task (MOBILE DEVICE EMULATION) ---
 async def run_playwright_task(username, password):
     global is_bot_running, current_step, current_pattern_index
     
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
+        
+        # Browser ကို ဖုန်းကဲ့သို့ အပြည့်အဝ ပုံဖျက်ခြင်း
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            viewport={'width': 1280, 'height': 720}
+            user_agent="Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+            viewport={'width': 390, 'height': 844}, 
+            is_mobile=True,
+            has_touch=True  
         )
         page = await context.new_page()
         
@@ -308,7 +308,7 @@ async def stop_autobet(message: types.Message):
     await message.reply("🛑 <b>Auto Bet ကို ရပ်တန့်ရန် အမိန့်ပေးလိုက်ပါပြီ။</b> (လက်ရှိပွဲပြီးလျှင် ရပ်ပါမည်)")
 
 async def main():
-    print("🚀 Auto Bet Bot စတင်နေပါပြီ...")
+    print("🚀 Wang Lin Game Store Auto Bet Bot စတင်နေပါပြီ...")
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
