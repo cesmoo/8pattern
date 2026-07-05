@@ -14,7 +14,30 @@ from playwright.async_api import async_playwright
 load_dotenv()
 
 # ==========================================
-# 🔐 2. UI AUTO LOGIN LOGIC (VUE.JS REACTIVITY FIX)
+# ⚙️ 1. CONFIGURATION
+# ==========================================
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+OWNER_ID = int(os.getenv("OWNER_ID", "0"))
+GAME_URL = "https://www.777bigwingame.app/"
+
+bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+
+# ⚠️ ဒီစာကြောင်းလေး ပျက်သွားလို့ Error တက်တာဖြစ်ပါတယ်
+dp = Dispatcher() 
+
+# --- 🔄 System Variables ---
+MULTIPLIERS = [1, 2, 4, 8, 16, 32, 64] # Default လောင်းကြေးအဆင့်များ
+CUSTOM_PATTERN = ["BIG"] # Default Pattern (အမြဲတမ်း အကြီး)
+current_step = 0
+current_pattern_index = 0
+is_bot_running = False
+
+# --- 🆕 Credentials တောင်းရန် State သတ်မှတ်ခြင်း ---
+class AutoBetState(StatesGroup):
+    waiting_for_credentials = State()
+
+# ==========================================
+# 🔐 2. UI AUTO LOGIN LOGIC (VUE.JS JS INJECTION FIX)
 # ==========================================
 async def login_via_ui(page, username, password):
     print("🔄 ဝဘ်ဆိုဒ်သို့ ချိတ်ဆက်၍ Login ဝင်နေပါသည်...")
@@ -25,8 +48,7 @@ async def login_via_ui(page, username, password):
 
         print("🔄 အချက်အလက်များ ထည့်သွင်းနေပါသည်...")
         
-        # 🔧 Fix: Playwright ၏ ရိုးရိုးရိုက်ထည့်ခြင်းအစား Browser ထဲသို့ JavaScript တိုက်ရိုက်ထည့်သွင်းခြင်း
-        # ဤနည်းလမ်းသည် Vue.js အား စာသားဝင်သွားကြောင်း အတင်းအကျပ် သိစေပါသည်။
+        # Browser ထဲသို့ JavaScript တိုက်ရိုက်ထည့်သွင်းခြင်း (Vue.js ကို ကျော်ဖြတ်ရန်)
         await page.evaluate(f"""
             // (၁) ဖုန်းနံပါတ် ထည့်သွင်းခြင်း
             let phone = document.querySelector('input[name="userNumber"]');
@@ -50,12 +72,11 @@ async def login_via_ui(page, username, password):
             }}
         """)
         
-        await page.wait_for_timeout(1500) # ဝဘ်ဆိုဒ်မှ Button ဖွင့်ပေးရန် ခဏစောင့်မည်
+        await page.wait_for_timeout(1500) 
 
         print("🔄 Login ခလုတ်ကို နှိပ်နေပါသည်...")
         
-        # ၄။ Login ခလုတ်ကို နှိပ်ရန်
-        # Playwright Click
+        # ၄။ Login ခလုတ်ကို နှိပ်ရန် (Playwright Click)
         login_btn = page.locator('div.signIn__container-button').first
         await login_btn.click(force=True)
         await page.wait_for_timeout(1000)
@@ -88,9 +109,6 @@ async def login_via_ui(page, username, password):
         await page.screenshot(path="login_error.png")
         return False
 
-
-
-
 # ==========================================
 # 🤖 3. PLAYWRIGHT AUTO BET LOGIC
 # ==========================================
@@ -107,7 +125,7 @@ async def place_bet(page, bet_type="BIG", step=0):
         
         await page.wait_for_timeout(1000)
 
-        # 2️⃣ Base Amount '10' ကို ရွေးရန် (text-is ကို သုံး၍ တိတိကျကျ ရွေးချယ်ခြင်း)
+        # 2️⃣ Base Amount '10' ကို ရွေးရန်
         await page.click("div.Betting__Popup-body-line-item:text-is('10')")
 
         # 3️⃣ Multiplier ထည့်သွင်းရန်
@@ -232,10 +250,10 @@ async def start_autobet_with_creds(message: types.Message, state: FSMContext):
         f"💰 Base Amount: 10 ကျပ်"
     )
 
-    # Playwright ကို နောက်ကွယ်မှ Run ခိုင်းခြင်း (Background Task)
+    # Playwright ကို နောက်ကွယ်မှ Run ခိုင်းခြင်း 
     asyncio.create_task(run_playwright_task(USERNAME, PASSWORD))
 
-# --- 🚀 Playwright Background Task (MOBILE DEVICE EMULATION) ---
+# --- 🚀 Playwright Background Task ---
 async def run_playwright_task(username, password):
     global is_bot_running, current_step, current_pattern_index
     
