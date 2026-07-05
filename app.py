@@ -58,9 +58,9 @@ async def login_via_api_and_inject(page, username, password):
         'packId': '',
         'deviceId': '51ed4ee0f338a1bb24063ffdfcd31ce6', 
         'language': 7,
-        'random': '4fc4413428be43faa1a3f30d9745ae3a',
-        'signature': '5458639AF428AC897FDFF1102D82EB9C',
-        'timestamp': 1773326030,
+        'random': 'bdc3a948fef649dbaecf29e745b25bdc',
+        'signature': '124FF22337DA9BE52300EE6C313B71B0',
+        'timestamp': 1783239813,
     }
 
     try:
