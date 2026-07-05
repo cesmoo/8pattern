@@ -18,8 +18,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = int(os.getenv("OWNER_ID", "0"))
 
-# 💡 သတိပြုရန် - အကယ်၍ Login ဝင်ပြီးနောက် ဂိမ်း (ဥပမာ - Win Go) ဆီသို့ တိုက်ရိုက် မရောက်ပါက 
-# အောက်ပါလင့်ခ်နေရာတွင် Win Go ဂိမ်း၏ လင့်ခ်အပြည့်အစုံကို ပြောင်းထည့်ပေးပါ။
+# 💡 ဂိမ်းလင့်ခ် (Login ဝင်ပြီးနောက် Win Go ဂိမ်းဆီသို့ ရောက်ရန်)
 GAME_URL = "https://www.777bigwingame.app/" 
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -36,7 +35,7 @@ class AutoBetState(StatesGroup):
     waiting_for_credentials = State()
 
 # ==========================================
-# 🔐 2. UI AUTO LOGIN LOGIC (NATIVE EVENT INJECTION)
+# 🔐 2. UI AUTO LOGIN LOGIC (FIXED SELECTORS)
 # ==========================================
 async def login_via_ui(page, username, password):
     print("🔄 ဝဘ်ဆိုဒ်သို့ ချိတ်ဆက်၍ Login ဝင်နေပါသည်...")
@@ -45,7 +44,7 @@ async def login_via_ui(page, username, password):
         await page.goto("https://www.777bigwingame.app/#/login", wait_until="networkidle")
         await page.wait_for_timeout(3000)
 
-        # 🔧 Native Event Setter: Vue.js အား လူအစစ်ရိုက်သကဲ့သို့ အတင်းအသိအမှတ်ပြုခိုင်းခြင်း
+        # 🔧 Native Event Setter (ပြင်ဆင်ပြီး)
         native_js = f"""
             function setNativeValue(element, value) {{
                 const valueSetter = Object.getOwnPropertyDescriptor(element, 'value').set;
@@ -61,7 +60,8 @@ async def login_via_ui(page, username, password):
                 element.dispatchEvent(new Event('change', {{ bubbles: true }}));
             }}
 
-            let phone = document.querySelector('input[name="userNumber"]');
+            // ✅ FIX: ဖုန်းနံပါတ်ထည့်သည့် input ကို ရှာရန် (phoneInput class ကို သုံးထား)
+            let phone = document.querySelector('div.phoneInput__container input');
             if (phone) setNativeValue(phone, '{username}');
 
             let pwd = document.querySelector('.passwordInput__container-input input');
@@ -73,9 +73,9 @@ async def login_via_ui(page, username, password):
         await page.wait_for_timeout(1000)
 
         print("🔄 Login ခလုတ်ကို နှိပ်နေပါသည်...")
-        # Login ခလုတ်အား JavaScript ဖြင့် အတင်းနှိပ်ခိုင်းခြင်း
+        # ✅ FIX: Login ခလုတ်ကို class အမျိုးမျိုးဖြင့် ရှာဖွေနိုင်ရန်
         await page.evaluate("""
-            let btn = document.querySelector('div.signIn__container-button');
+            let btn = document.querySelector('div.signIn__container-button, button.submit-btn, div.login-btn');
             if (btn) btn.click();
         """)
         
@@ -88,7 +88,7 @@ async def login_via_ui(page, username, password):
             return False
             
         await page.goto(GAME_URL)
-        await page.wait_for_timeout(4000) # ဂိမ်းစာမျက်နှာ ပွင့်လာရန် စောင့်မည်
+        await page.wait_for_timeout(4000) 
         
         print("✅ UI မှတစ်ဆင့် Login ဝင်ခြင်း အောင်မြင်ပါပြီ။")
         return True
@@ -99,7 +99,7 @@ async def login_via_ui(page, username, password):
         return False
 
 # ==========================================
-# 🤖 3. PLAYWRIGHT AUTO BET LOGIC (JS FIX)
+# 🤖 3. PLAYWRIGHT AUTO BET LOGIC
 # ==========================================
 async def place_bet(page, bet_type="BIG", step=0):
     try:
