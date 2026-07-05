@@ -34,8 +34,9 @@ is_bot_running = False
 class AutoBetState(StatesGroup):
     waiting_for_credentials = State()
 
+
 # ==========================================
-# 🔐 2. UI AUTO LOGIN LOGIC (FINAL FIX)
+# 🔐 2. UI AUTO LOGIN LOGIC (EXACT ATTRIBUTE FIX)
 # ==========================================
 async def login_via_ui(page, username, password):
     print("🔄 ဝဘ်ဆိုဒ်သို့ ချိတ်ဆက်၍ Login ဝင်နေပါသည်...")
@@ -45,7 +46,7 @@ async def login_via_ui(page, username, password):
         await page.goto("https://www.777bigwingame.app/#/login", wait_until="networkidle")
         await page.wait_for_timeout(3000)
 
-        # ✅ 2. ဖုန်းနံပါတ် ထည့်မည် (ပုံမှာ ရောက်နေပြီဆိုတော့ ဒါက အဆင်ပြေပါတယ်)
+        # ✅ 2. ဖုန်းနံပါတ် ထည့်မည် (name="userNumber" ကို သုံးမည်)
         phone_input = page.locator('input[name="userNumber"]')
         if await phone_input.is_visible():
             await phone_input.click()
@@ -53,21 +54,17 @@ async def login_via_ui(page, username, password):
             await phone_input.type(username, delay=100)
             print(f"✅ ဖုန်းနံပါတ် ထည့်ပြီးပါပြီ။")
 
-        # ✅ 3. စကားဝှက် ထည့်မည် (ဒီနေရာကို ပိုပြီးတိကျအောင် ပြင်ထားပါတယ်)
-        # page.locator နေရာမှာ input အမျိုးအစားကို အတိအကျ ကန့်သတ်ထားပါတယ်
+        # ✅ 3. စကားဝှက် ထည့်မည် (ပုံထဲက type="password" ကို တိုက်ရိုက်သုံးမယ်)
         try:
-            # စကားဝှက်နေရာကို ပထမဦးစွာ ရှာမယ်
-            pwd_container = page.locator('div.passwordInput__container-input')
-            if await pwd_container.is_visible():
-                # container ထဲက input ကို ရှာမယ်
-                pwd_input = pwd_container.locator('input')
+            # type="password" ရှိတဲ့ input ကို ရှာမယ်
+            pwd_input = page.locator('input[type="password"]')
+            if await pwd_input.is_visible():
                 await pwd_input.click()
                 await page.wait_for_timeout(500)
                 await pwd_input.type(password, delay=100)
                 print(f"✅ စကားဝှက် ထည့်ပြီးပါပြီ။")
             else:
-                print("⚠️ စကားဝှက်နေရာကို ရှာမတွေ့ပါ။ (အခြားနည်းဖြင့် ကြိုးစားနေပါသည်...)")
-                # Backup နည်းလမ်း: placeholder စာသားနဲ့ ရှာမယ်
+                # Backup: placeholder နဲ့ရှာမယ်
                 await page.evaluate(f"""
                     let inputs = document.querySelectorAll('input[type="password"]');
                     if(inputs.length > 0) {{
@@ -82,17 +79,16 @@ async def login_via_ui(page, username, password):
 
         await page.wait_for_timeout(2000) # စကားဝှက်ထည့်ပြီး ၂ စက္ကန့်စောင့်မည်
 
-        # ✅ 4. Login ခလုတ်ကို နှိပ်မည် (JavaScript ဖြင့် ပိုမိုသေချာစွာ နှိပ်ရန်)
+        # ✅ 4. Login ခလုတ်ကို နှိပ်မည် (အရင်နည်းအတိုင်း)
         print("🔄 Login ခလုတ်ကို နှိပ်နေပါသည်...")
         
-        # Javascript နဲ့ တိုက်ရိုက် ရှာပြီး click လုပ်မယ် (Element ကို သေချာရှာဖို့)
         click_result = await page.evaluate("""
             function clickLogin() {
                 // class name နဲ့ ရှာမယ်
                 let btn = document.querySelector('div.signIn__container-button');
                 if (btn) { btn.click(); return true; }
                 
-                // text နဲ့ ရှာမယ် (မင်္ဂလာပါ / ဝင်ရန်)
+                // text နဲ့ ရှာမယ်
                 let btns = document.querySelectorAll('button, div[role="button"], div.clickable');
                 for(let b of btns) {
                     let text = b.innerText.trim();
