@@ -51,16 +51,21 @@ async def login_via_api_and_inject(page, username, password):
     
     # API ၏ လိုအပ်ချက်အရ ပုံသေ Data အချို့ ထည့်သွင်းထားသည်
     json_data = {
-        'username': username,
-        'pwd': password,
-        'phonetype': 1,
-        'logintype': 'mobile',
-        'packId': '',
-        'deviceId': '51ed4ee0f338a1bb24063ffdfcd31ce6', 
-        'language': 7,
-        'random': 'bdc3a948fef649dbaecf29e745b25bdc',
-        'signature': '124FF22337DA9BE52300EE6C313B71B0',
-        'timestamp': 1783239813,
+         'username': '959680090540',
+         'pwd': 'Mitheint11',
+         'phonetype': 1,
+         'logintype': 'mobile',
+         'packId': '',
+         'deviceId': '51ed4ee0f338a1bb24063ffdfcd31ce6',
+         'pixelId': '',
+         'fbcId': '',
+         'fbc': '',
+         'fbp': '',
+         'adId': '',
+         'language': 0,
+         'random': 'bdc3a948fef649dbaecf29e745b25bdc',
+         'signature': '124FF22337DA9BE52300EE6C313B71B0',
+         'timestamp': 1783239813,
     }
 
     try:
