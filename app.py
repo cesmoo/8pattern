@@ -35,7 +35,7 @@ class AutoBetState(StatesGroup):
     waiting_for_credentials = State()
 
 # ==========================================
-# 🔐 2. UI AUTO LOGIN LOGIC
+# 🔐 2. UI AUTO LOGIN LOGIC (FIXED PASSWORD INPUT)
 # ==========================================
 async def login_via_ui(page, username, password):
     print("🔄 ဝဘ်ဆိုဒ်သို့ ချိတ်ဆက်၍ Login ဝင်နေပါသည်...")
@@ -45,19 +45,22 @@ async def login_via_ui(page, username, password):
         await page.goto("https://www.777bigwingame.app/#/login", wait_until="networkidle")
         await page.wait_for_timeout(3000)
 
-        # ၂။ ဖုန်းနံပါတ် ရိုက်ထည့်ရန်
+        # ၂။ ဖုန်းနံပါတ် ရိုက်ထည့်ရန် (ယခုအပိုင်း အလုပ်လုပ်ပါသည်)
         await page.wait_for_selector('input[name="userNumber"]', timeout=10000)
         username_input = page.locator('input[name="userNumber"]')
         await username_input.fill(username)
         await page.wait_for_timeout(1000)
 
-        # ၃။ Password ရိုက်ထည့်ရန် (CSS selector ကို အသုံးပြုထားသည်)
-        password_input = page.locator('div.passwordInput__container-input input')
+        # ၃။ Password ရိုက်ထည့်ရန် (🔧 ဤနေရာကို ပိုမိုတိကျအောင် ပြင်ဆင်ထားသည်)
+        # Class ကို တိုက်ရိုက်ခေါ်ပြီး click အရင်လုပ်ပါမည်
+        password_input = page.locator('.passwordInput__container-input input').first
+        await password_input.wait_for(state="visible", timeout=5000)
+        await password_input.click() # စာမရိုက်ခင် အကွက်ကို အရင်ရွေးချယ်မည်
         await password_input.fill(password)
         await page.wait_for_timeout(1000)
 
         # ၄။ Login ခလုတ်ကို နှိပ်ရန်
-        login_btn = page.locator('div.signIn__container-button')
+        login_btn = page.locator('.signIn__container-button').first
         await login_btn.click()
         
         # ၅။ Login ဝင်ပြီးနောက် ၅ စက္ကန့် စောင့်ဆိုင်းခြင်း
@@ -80,6 +83,7 @@ async def login_via_ui(page, username, password):
         print(f"❌ Login ဝင်ရာတွင် အမှားအယွင်းရှိပါသည်: {e}")
         await page.screenshot(path="login_error.png")
         return False
+
 
 # ==========================================
 # 🤖 3. PLAYWRIGHT AUTO BET LOGIC
