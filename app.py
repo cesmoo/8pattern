@@ -177,8 +177,13 @@ async def start_autobet(message: types.Message):
     if is_bot_running:
         return await message.reply("⚠️ Auto Bet အလုပ်လုပ်နေဆဲ ဖြစ်ပါသည်။")
     
-    if not WEB_TOKEN:
-        return await message.reply("❌ Error: WEB_TOKEN မရှိပါ။")
+    # --- 🔧 ပြင်ဆင်လိုက်သော အပိုင်း (WEB_TOKEN အစား USERNAME, PASSWORD ကို စစ်ဆေးခြင်း) ---
+    USERNAME = os.getenv("USERNAME")
+    PASSWORD = os.getenv("PASSWORD")
+
+    if not USERNAME or not PASSWORD:
+        return await message.reply("❌ Error: .env တွင် USERNAME သို့မဟုတ် PASSWORD မထည့်ထားပါ။")
+    # --------------------------------------------------------------------------
 
     is_bot_running = True
     current_step = 0
@@ -195,7 +200,14 @@ async def start_autobet(message: types.Message):
         page = await context.new_page()
         
         try:
-            await login_via_token(page, WEB_TOKEN)
+            # --- 🔧 Token အစား UI ကို အသုံးပြု၍ Login ဝင်ခြင်း ---
+            login_success = await login_via_ui(page, USERNAME, PASSWORD)
+            
+            if not login_success:
+                await bot.send_message(OWNER_ID, "❌ Login ဝင်၍ မရပါ။")
+                is_bot_running = False
+                return 
+            # -----------------------------------------------
             
             while is_bot_running:
                 # Pattern ထဲမှ လက်ရှိလောင်းရမည့် အကြီး/အသေး ကို ရွေးချယ်ခြင်း
@@ -225,7 +237,6 @@ async def start_autobet(message: types.Message):
                         else:
                             await bot.send_message(OWNER_ID, f"❌ <b>ရှုံးပါသည်။</b>\nနောက်ပွဲကို <b>{MULTIPLIERS[current_step]}ဆ</b> ဖြင့် ဆက်လောင်းပါမည်။")
                     
-                    # နိုင်သည်ဖြစ်စေ ရှုံးသည်ဖြစ်စေ Pattern အစီအစဉ်ကို နောက်တစ်ဆင့်သို့ ပြောင်းမည်
                     current_pattern_index += 1
                 else:
                     await bot.send_message(OWNER_ID, "⚠️ Error: လောင်း၍မရပါ။ ၅ စက္ကန့်အကြာ ပြန်စမ်းပါမည်။")
@@ -237,6 +248,7 @@ async def start_autobet(message: types.Message):
             await browser.close()
             is_bot_running = False
             await bot.send_message(OWNER_ID, "🔌 Browser ပိတ်လိုက်ပါပြီ။")
+
 
 @dp.message(Command("stopbet"))
 async def stop_autobet(message: types.Message):
