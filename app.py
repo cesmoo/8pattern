@@ -58,10 +58,14 @@ async def login_via_ui(page, username, password):
         await password_input.click() # စာမရိုက်ခင် အကွက်ကို အရင်ရွေးချယ်မည်
         await password_input.fill(password)
         await page.wait_for_timeout(1000)
+          
+        # ၄။ Login ခလုတ်ကို နှိပ်ရန် (🔧 JS ဖြင့် အတင်းနှိပ်ခိုင်းခြင်း)
+        await page.wait_for_timeout(1000) # ခလုတ်ပေါ်လာရန် ခဏစောင့်မည်
+        login_btn = page.locator('div.signIn__container-button').first
+        
+        # ရိုးရိုး Click အစား JavaScript ကို အသုံးပြု၍ တိုက်ရိုက် Action ယူခြင်း
+        await login_btn.evaluate("node => node.click()")
 
-        # ၄။ Login ခလုတ်ကို နှိပ်ရန်
-        login_btn = page.locator('.signIn__container-button').first
-        await login_btn.click()
         
         # ၅။ Login ဝင်ပြီးနောက် ၅ စက္ကန့် စောင့်ဆိုင်းခြင်း
         await page.wait_for_timeout(5000)
