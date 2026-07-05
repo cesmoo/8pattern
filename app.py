@@ -7,6 +7,7 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import FSInputFile
 from playwright.async_api import async_playwright
 
 # .env ဖိုင်ကို ဖတ်ရန်
@@ -39,28 +40,36 @@ class AutoBetState(StatesGroup):
 async def login_via_ui(page, username, password):
     print("🔄 ဝဘ်ဆိုဒ်သို့ ချိတ်ဆက်၍ Login ဝင်နေပါသည်...")
     
-    # ၁။ Login Page သို့ သွားရန်
-    await page.goto("https://www.777bigwingame.app/#/login")
-    await page.wait_for_timeout(3000)
-
     try:
-        # ၂။ ဖုန်းနံပါတ် (Username) ရိုက်ထည့်ရန်
+        # ဝဘ်ဆိုဒ် အပြည့်အဝ တက်လာသည်အထိ စောင့်ရန်
+        await page.goto("https://www.777bigwingame.app/#/login", wait_until="networkidle")
+        await page.wait_for_timeout(3000)
+
+        # ၂။ ဖုန်းနံပါတ် ရိုက်ထည့်ရန်
+        await page.wait_for_selector('input[name="userNumber"]', timeout=10000)
         username_input = page.locator('input[name="userNumber"]')
         await username_input.fill(username)
-        await page.wait_for_timeout(500)
+        await page.wait_for_timeout(1000)
 
-        # ၃။ Password ရိုက်ထည့်ရန်
-        password_input = page.locator('input[placeholder="စကားဝှက်"]')
+        # ၃။ Password ရိုက်ထည့်ရန် (CSS selector ကို အသုံးပြုထားသည်)
+        password_input = page.locator('div.passwordInput__container-input input')
         await password_input.fill(password)
-        await page.wait_for_timeout(500)
+        await page.wait_for_timeout(1000)
 
         # ၄။ Login ခလုတ်ကို နှိပ်ရန်
-        await page.click('div.signIn__container-button')
+        login_btn = page.locator('div.signIn__container-button')
+        await login_btn.click()
         
-        # Login ဝင်ပြီးနောက် Home Page သို့ ရောက်ရန် စောင့်ဆိုင်းခြင်း
+        # ၅။ Login ဝင်ပြီးနောက် ၅ စက္ကန့် စောင့်ဆိုင်းခြင်း
         await page.wait_for_timeout(5000)
         
-        # ၅။ Game ရှိရာ စာမျက်နှာသို့ ဆက်သွားရန်
+        # URL စစ်ဆေးခြင်း (Login အောင်မြင်ပါက URL ပြောင်းသွားရမည်)
+        current_url = page.url
+        if "login" in current_url.lower():
+            await page.screenshot(path="login_error.png")
+            return False
+            
+        # Game ရှိရာ စာမျက်နှာသို့ ဆက်သွားရန်
         await page.goto(GAME_URL)
         await page.wait_for_timeout(3000)
         
@@ -69,6 +78,7 @@ async def login_via_ui(page, username, password):
 
     except Exception as e:
         print(f"❌ Login ဝင်ရာတွင် အမှားအယွင်းရှိပါသည်: {e}")
+        await page.screenshot(path="login_error.png")
         return False
 
 # ==========================================
@@ -169,7 +179,7 @@ async def set_multipliers(message: types.Message):
         await message.reply("❌ Error: ကိန်းဂဏန်းများသာ ကွက်လပ်ခြား၍ ရိုက်ထည့်ပါ။")
 
 # ==========================================
-# 🎮 5. TELEGRAM BOT CORE HANDLERS (FSM & Background Task)
+# 🎮 5. TELEGRAM BOT CORE HANDLERS
 # ==========================================
 @dp.message(Command("autobet"))
 async def ask_credentials(message: types.Message, state: FSMContext):
@@ -222,16 +232,23 @@ async def run_playwright_task(username, password):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            viewport={'width': 1280, 'height': 720}
         )
         page = await context.new_page()
         
         try:
-            # ဝင်လာတဲ့ ဖုန်းနံပါတ်၊ Password ဖြင့် Login ဝင်ခြင်း
             login_success = await login_via_ui(page, username, password)
             
             if not login_success:
-                await bot.send_message(OWNER_ID, "❌ Login ဝင်၍ မရပါ။ ကျေးဇူးပြု၍ ဖုန်းနံပါတ်နှင့် Password မှန်ကန်မှုရှိမရှိ စစ်ဆေးပါ။")
+                error_msg = "❌ Login ဝင်၍ မရပါ။ စကားဝှက်မှားနေခြင်း သို့မဟုတ် Captcha တောင်းနေခြင်း ဖြစ်နိုင်ပါသည်။"
+                await bot.send_message(OWNER_ID, error_msg)
+                
+                if os.path.exists("login_error.png"):
+                    photo = FSInputFile("login_error.png")
+                    await bot.send_photo(OWNER_ID, photo, caption="📸 နောက်ကွယ်တွင် ဖြစ်ပေါ်နေသော မျက်နှာပြင်ပုံ")
+                    os.remove("login_error.png")
+                
                 is_bot_running = False
                 return 
             
