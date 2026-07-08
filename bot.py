@@ -77,17 +77,20 @@ def premium_emoji(emoji_key, fallback):
     return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
 
 class Emoji:
-    # ========== Premium Custom Emojis (တစ်ခုချင်းစီအတွက် သီးသန့် ID) ==========
-    WIN_CHECK = premium_emoji("win_check", "✅")       # ID: win_check
-    LOSE_CROSS = premium_emoji("lose_cross", "❌")     # ID: lose_cross
-    ORDER = premium_emoji("order", "📝")               # ID: order
-    GAME_ICON = premium_emoji("game", "🎮")            # ID: game
-    CHART_ICON = premium_emoji("chart", "📊")          # ID: chart
-    MONEY_ICON = premium_emoji("money", "💰")          # ID: money
-    LOSS_ICON = premium_emoji("loss", "📉")            # ID: loss
-    BRAIN = premium_emoji("brain", "🧠")
+    # ========== Premium Custom Emojis (၈ ခု) ==========
+    WIN_CHECK = premium_emoji("win_check", "✅")       # Premium ✅
+    LOSE_CROSS = premium_emoji("lose_cross", "❌")     # Premium ❌
+    ORDER = premium_emoji("order", "📝")               # Premium 📝
+    GAME_ICON = premium_emoji("game", "🎮")            # Premium 🎮
+    CHART_ICON = premium_emoji("chart", "📊")          # Premium 📊
+    MONEY_ICON = premium_emoji("money", "💰")          # Premium 💰
+    LOSS_ICON = premium_emoji("loss", "📉")            # Premium 📉
+    BRAIN = premium_emoji("brain", "🧠")               # Premium 🧠
+    BRAIN_STANDARD = "🧠"                              # Standard fallback
     
-    # ========== Standard Emojis ==========
+    # ========== Standard Emojis (Premium မသုံးတဲ့နေရာတွေအတွက်) ==========
+    CHECK = "✅"          # ← Standard CHECK ပြန်ထည့်ထား
+    CROSS = "❌"          # ← Standard CROSS ပြန်ထည့်ထား
     WARNING = "⚠️"
     INFO = "ℹ️"
     STAR = "⭐"
@@ -121,7 +124,6 @@ class Emoji:
     IDLE = "🟡"
     
     ROBOT = "🤖"
-   # BRAIN = "🧠"
     PATTERN = "🎯"
     MARTINGALE = "🎲"
     ANTIMARTINGALE = "🔄"
